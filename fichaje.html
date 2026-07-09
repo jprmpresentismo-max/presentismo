@@ -49,14 +49,24 @@ const SUPABASE_KEY = 'sb_publishable_EYrQB6AUQZ_c_K3xS9hCVw_nQkdmI9S';
 const H = {'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=representation'};
 const api = (path, opt={}) => fetch(SUPABASE_URL+'/rest/v1/'+path,{headers:H,...opt}).then(r=>r.json());
 
-const params = new URLSearchParams(location.search);
-const OFICINA = (params.get('oficina')||'').replace(/_/g,' ').toUpperCase() || 'SIN OFICINA';
-document.getElementById('ofi').textContent = OFICINA;
+const OFICINAS = ['JEFE DE SERVICIO','OFICINA DE ADMINISTRACION','GUARDIA','CUSTODIA EDILICIA','TRAMITES VARIOS','MESA DE ENTRADAS','FICHERO','EPA','DICTAMENES','GABINETE PSICOLOGICO PRESENCIAL','GABINETE PSICOLOGICO VIRTUAL','MEDICOS','OFICINA DE MANTENIMIENTO Y SOPORTE TECNOLOGICO'];
+document.getElementById('ofi').textContent = 'PRESENTISMO GENERAL';
 
 const card = document.getElementById('card');
 const errBox = document.getElementById('err');
 const hoy = () => new Date().toLocaleDateString('sv-SE',{timeZone:'America/Argentina/Buenos_Aires'});
 const horaAR = d => new Date(d).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Argentina/Buenos_Aires'});
+function horaMostrar(horaIso, horario){
+  const [hh,mm] = new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Argentina/Buenos_Aires'}).format(new Date(horaIso)).split(':').map(Number);
+  const t = hh + mm/60;
+  const nums = (horario||'08 a 20').match(/\d{1,2}/g);
+  if(nums && nums.length){
+    const E = +nums[0]; const F = nums.length>1 ? +nums[1] : null;
+    const dentro = F===null ? t>=E : (F>E ? (t>=E && t<F) : (t>=E || t<F));
+    if(dentro) return String(E).padStart(2,'0')+':00';
+  }
+  return horaAR(horaIso);
+}
 const mostrarError = m => {errBox.textContent=m; errBox.style.display='block'};
 const limpiarError = () => errBox.style.display='none';
 
@@ -68,7 +78,7 @@ let yo = null;
 
 // Al abrir: consultar a que persona esta vinculado ESTE telefono (la base manda, no el localStorage)
 async function iniciar(){
-  const v = await api(`dispositivos?device_id=eq.${DEV}&select=personal_id,personal(id,jerarquia,apellido_nombre,oficina)`);
+  const v = await api(`dispositivos?device_id=eq.${DEV}&select=personal_id,personal(id,jerarquia,apellido_nombre,oficina,horario)`);
   if(v && v.length && v[0].personal){
     yo = v[0].personal;
     pantallaFichar();
@@ -84,15 +94,30 @@ function pantallaBusqueda(){
   let t;
   q.oninput = () => { clearTimeout(t); t = setTimeout(async()=>{
     if(q.value.trim().length<2){res.innerHTML='';return}
-    const rows = await api(`personal?apellido_nombre=ilike.*${encodeURIComponent(q.value.trim())}*&activo=eq.true&select=id,jerarquia,apellido_nombre,oficina&limit=10`);
+    const rows = await api(`personal?apellido_nombre=ilike.*${encodeURIComponent(q.value.trim())}*&activo=eq.true&select=id,jerarquia,apellido_nombre,oficina,horario&limit=10`);
     res.innerHTML = (rows||[]).map(p=>`<button onclick='elegir(${JSON.stringify(p)})'>${p.apellido_nombre}<small>${p.jerarquia} — ${p.oficina}</small></button>`).join('') || '<small style="color:#64748b">Sin resultados</small>';
   },300)};
   q.focus();
 }
 
 // Vincular telefono <-> persona. Si la persona ya tiene otro telefono, la base lo rechaza.
-window.elegir = async p => {
+window.elegir = p => {
   limpiarError();
+  window._sel = p;
+  card.innerHTML = `<div class="quien"><b>${p.apellido_nombre}</b><small>${p.jerarquia}</small></div>
+  <p style="color:#94a3b8;font-size:14px;margin-bottom:8px">Confirmá a qué oficina pertenecés:</p>
+  <select id="sel-ofi" style="width:100%;padding:14px;border-radius:10px;border:1px solid #475569;background:#0f172a;color:#f1f5f9;font-size:16px">${OFICINAS.map(o=>`<option ${o===p.oficina?'selected':''}>${o}</option>`).join('')}</select>
+  <button class="big" style="margin-top:14px" onclick="confirmarOficina()">CONFIRMAR Y VINCULAR</button>`;
+};
+
+window.confirmarOficina = async () => {
+  limpiarError();
+  const p = window._sel;
+  const ofi = document.getElementById('sel-ofi').value;
+  if(ofi !== p.oficina){
+    await fetch(SUPABASE_URL+'/rest/v1/personal?id=eq.'+p.id,{method:'PATCH',headers:H,body:JSON.stringify({oficina:ofi})});
+    p.oficina = ofi;
+  }
   const r = await api('dispositivos',{method:'POST',body:JSON.stringify({device_id:DEV,personal_id:p.id})});
   if(Array.isArray(r) && r.length){
     yo = p;
@@ -105,6 +130,7 @@ window.elegir = async p => {
 };
 
 async function pantallaFichar(){
+  document.getElementById('ofi').textContent = yo.oficina || 'PRESENTISMO GENERAL';
   card.innerHTML = `<div class="quien"><b>${yo.apellido_nombre}</b><small>${yo.jerarquia}</small><br>
   <span class="candado">🔒 Vinculado a este teléfono</span></div>
   <div id="accion">Cargando...</div>`;
@@ -113,9 +139,9 @@ async function pantallaFichar(){
   if(f && f.length){
     const reg = f[0];
     if(reg.hora_salida){
-      acc.innerHTML = `<div class="ok"><div class="tilde">✅</div><h2>Jornada completa</h2><p style="color:#94a3b8">Entrada ${horaAR(reg.hora_entrada)} — Salida ${horaAR(reg.hora_salida)}</p></div>`;
+      acc.innerHTML = `<div class="ok"><div class="tilde">✅</div><h2>Jornada completa</h2><p style="color:#94a3b8">Entrada ${horaMostrar(reg.hora_entrada, yo.horario)} — Salida ${horaAR(reg.hora_salida)}</p></div>`;
     } else {
-      acc.innerHTML = `<div class="ok"><div class="tilde">✅</div><h2>Ya estás presente</h2><p style="color:#94a3b8">Fichaste a las <b style="color:#fff">${horaAR(reg.hora_entrada)}</b> en ${reg.oficina}</p></div>
+      acc.innerHTML = `<div class="ok"><div class="tilde">✅</div><h2>Ya estás presente</h2><p style="color:#94a3b8">Fichaste a las <b style="color:#fff">${horaMostrar(reg.hora_entrada, yo.horario)}</b> en ${reg.oficina}</p></div>
       <button class="big rojo" onclick="salida(${reg.id})">REGISTRAR SALIDA</button>`;
     }
   } else {
@@ -125,9 +151,9 @@ async function pantallaFichar(){
 
 window.entrada = async () => {
   limpiarError();
-  const r = await api('fichajes',{method:'POST',body:JSON.stringify({personal_id:yo.id,oficina:OFICINA,fecha:hoy(),device_id:DEV})});
+  const r = await api('fichajes',{method:'POST',body:JSON.stringify({personal_id:yo.id,oficina:yo.oficina,fecha:hoy(),device_id:DEV})});
   if(Array.isArray(r) && r.length){
-    card.querySelector('#accion').innerHTML = `<div class="ok"><div class="tilde">🎉</div><h2>¡Presente registrado!</h2><div class="hora">${horaAR(r[0].hora_entrada)}</div><p style="color:#94a3b8">${OFICINA}</p></div>`;
+    card.querySelector('#accion').innerHTML = `<div class="ok"><div class="tilde">🎉</div><h2>¡Presente registrado!</h2><div class="hora">${horaMostrar(r[0].hora_entrada, yo.horario)}</div><p style="color:#94a3b8">${yo.oficina}</p></div>`;
     if(navigator.vibrate) navigator.vibrate(200);
   } else if(r && r.code==='23505'){
     mostrarError('⛔ Ya existe un presente registrado hoy para vos o para este teléfono. El presentismo se da una sola vez por día.');

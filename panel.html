@@ -97,7 +97,9 @@ h1 small{display:block;font-size:12px;color:#64748b;font-weight:400}
 </div>
 
 <div id="vista-qrs" style="display:none">
-  <p style="font-size:13px;color:#64748b;margin-bottom:12px">Imprimí cada QR y pegalo en la oficina. Para NFC: grabá la misma URL en una etiqueta NTAG213 con la app <b>NFC Tools</b> (Escribir → Añadir registro → URL).</p>
+  <p style="font-size:13px;color:#64748b;margin-bottom:12px">Hay un <b>único QR general</b>: imprimilo y pegalo donde haga falta (entrada, oficinas, etc.). Cada persona queda asociada a su oficina al registrarse la primera vez.</p>
+  <button class="b1" style="margin-bottom:6px" onclick="grabarNFC()">📲 Grabar etiqueta NFC</button>
+  <p style="font-size:12px;color:#94a3b8;margin-bottom:12px">La grabación NFC funciona desde un celular <b>Android con Chrome</b> y NFC activado (etiquetas NTAG213). Desde PC o iPhone usá la app <b>NFC Tools</b> con la misma URL.</p>
   <div id="qrs"></div>
 </div>
 
@@ -108,7 +110,7 @@ const SUPABASE_KEY = 'sb_publishable_EYrQB6AUQZ_c_K3xS9hCVw_nQkdmI9S';
 const URL_FICHAJE = 'https://jprmpresentismo-max.github.io/presentismo/fichaje.html'; // donde subas fichaje.html
 // ==============================================
 
-const OFICINAS = ['JEFE DE SERVICIO','OFICINA DE ADMINISTRACION','GUARDIA','CUSTODIA EDILICIA','TRAMITES VARIOS','MESA DE ENTRADAS','FICHERO','EPA','DICTAMENES','GABINETE PSICOLOGICO PRESENCIAL','GABINETE PSICOLOGICO VIRTUAL','MEDICOS'];
+const OFICINAS = ['JEFE DE SERVICIO','OFICINA DE ADMINISTRACION','GUARDIA','CUSTODIA EDILICIA','TRAMITES VARIOS','MESA DE ENTRADAS','FICHERO','EPA','DICTAMENES','GABINETE PSICOLOGICO PRESENCIAL','GABINETE PSICOLOGICO VIRTUAL','MEDICOS','OFICINA DE MANTENIMIENTO Y SOPORTE TECNOLOGICO'];
 const TIPOS_NOV = ['LICENCIA ANUAL','LICENCIA MEDICA','ABANDONO DE SERVICIO EN TRAMITE','FRANCO DE SERVICIO','FRANCO AUTORIZADO'];
 
 const H = {'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY};
@@ -118,6 +120,19 @@ const horaAR = d => new Date(d).toLocaleTimeString('es-AR',{hour:'2-digit',minut
 document.getElementById('fecha').textContent = new Date().toLocaleDateString('es-AR',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric',timeZone:'America/Argentina/Buenos_Aires'}).toUpperCase();
 
 let DATA = {personal:[],fichajes:[],novedades:[]};
+
+// Hora a mostrar en el parte: si ficho dentro de su rango horario, figura la hora de entrada asignada
+function horaParte(f,p){
+  const [hh,mm] = new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Argentina/Buenos_Aires'}).format(new Date(f.hora_entrada)).split(':').map(Number);
+  const t = hh + mm/60;
+  const nums = (p.horario||'08 a 20').match(/\d{1,2}/g);
+  if(nums && nums.length){
+    const E = +nums[0]; const F = nums.length>1 ? +nums[1] : null;
+    const dentro = F===null ? t>=E : (F>E ? (t>=E && t<F) : (t>=E || t<F));
+    if(dentro) return String(E).padStart(2,'0')+':00';
+  }
+  return horaAR(f.hora_entrada);
+}
 
 async function cargar(){
   if(SUPABASE_URL.includes('TU-PROYECTO')){ document.getElementById('warn').style.display='block'; demo(); render(); return; }
@@ -179,7 +194,7 @@ function render(){
     const pres = gente.filter(p=>estado(p).tipo==='PRESENTE').length;
     let lis = gente.map(p=>{
       const e = estado(p);
-      const tag = e.tipo==='PRESENTE' ? `<span class="hora">✔ ${horaAR(e.f.hora_entrada)}${e.f.hora_salida?' → '+horaAR(e.f.hora_salida):''}</span>`
+      const tag = e.tipo==='PRESENTE' ? `<span class="hora">✔ ${horaParte(e.f,p)}${e.f.hora_salida?' → '+horaAR(e.f.hora_salida):''}</span>`
         : e.tipo==='NOVEDAD' ? `<span class="nov">${e.n.tipo}${e.n.detalle?' ('+e.n.detalle+')':''}</span>`
         : `<span class="aus">SIN FICHAR</span>`;
       return `<li><span>${p.apellido_nombre} <span style="color:#1e3a8a;font-weight:700">(${p.horario||'08 a 20'})</span><br><small>${p.jerarquia}</small></span>${tag}</li>`;
@@ -260,15 +275,28 @@ window.desvincular = async (id,nombre) => {
 
 function generarQRs(){
   const cont = document.getElementById('qrs');
-  OFICINAS.forEach(o=>{
-    const url = URL_FICHAJE + '?oficina=' + encodeURIComponent(o.replace(/ /g,'_'));
-    const div = document.createElement('div');
-    div.className = 'qrcard';
-    div.innerHTML = `<h4>${o}</h4><div class="qrbox"></div><p>${url}</p>`;
-    cont.appendChild(div);
-    new QRCode(div.querySelector('.qrbox'),{text:url,width:160,height:160});
-  });
+  const div = document.createElement('div');
+  div.className = 'qrcard';
+  div.innerHTML = `<h4>QR GENERAL — PRESENTISMO J.P.R.M.</h4><div class="qrbox"></div><p>${URL_FICHAJE}</p>`;
+  cont.appendChild(div);
+  new QRCode(div.querySelector('.qrbox'),{text:URL_FICHAJE,width:220,height:220});
 }
+
+// Grabar etiqueta NFC con la URL general de fichaje (Chrome en Android con NFC)
+window.grabarNFC = async () => {
+  if(!('NDEFReader' in window)){
+    alert('Para grabar NFC abri el panel desde un celular Android con Chrome y NFC activado. Desde PC o iPhone usa la app NFC Tools (Escribir > Anadir registro > URL > '+URL_FICHAJE+').');
+    return;
+  }
+  try{
+    const w = new NDEFReader();
+    alert('Al aceptar, acerca la etiqueta NFC a la parte trasera del celular y mantenela hasta ver la confirmacion.');
+    await w.write({records:[{recordType:'url', data: URL_FICHAJE}]});
+    alert('✔ Etiqueta grabada. Al apoyar un celular abre la pagina de fichaje.');
+  }catch(e){
+    alert('No se pudo grabar la etiqueta: '+e.message);
+  }
+};
 
 function filas(){
   const rows = [];
@@ -279,7 +307,7 @@ function filas(){
     rows.push({tipo:'sec',texto:o});
     gente.forEach(p=>{
       const e = estado(p);
-      const est = e.tipo==='PRESENTE' ? `PRESENTE (${horaAR(e.f.hora_entrada)}${e.f.hora_salida?' a '+horaAR(e.f.hora_salida):''})`
+      const est = e.tipo==='PRESENTE' ? `PRESENTE (${horaParte(e.f,p)}${e.f.hora_salida?' a '+horaAR(e.f.hora_salida):''})`
         : e.tipo==='NOVEDAD' ? e.n.tipo + (e.n.detalle?' - '+e.n.detalle:'') : 'SIN FICHAR';
       rows.push({tipo:'per',jer:p.jerarquia,nom:`${p.apellido_nombre} (${p.horario||'08 a 20'})`,est});
     });
