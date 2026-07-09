@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Fichaje JPRM</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,'Segoe UI',Roboto,sans-serif}
+body{background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px}
+.logo{font-size:13px;letter-spacing:3px;color:#64748b;margin-bottom:4px}
+h1{font-size:20px;color:#f8fafc;text-align:center}
+.oficina{background:#1e3a8a;color:#bfdbfe;padding:8px 20px;border-radius:999px;font-weight:700;font-size:15px;margin:14px 0 24px;text-transform:uppercase;letter-spacing:1px}
+.card{background:#1e293b;border:1px solid #334155;border-radius:16px;padding:24px;width:100%;max-width:420px}
+input{width:100%;padding:14px;border-radius:10px;border:1px solid #475569;background:#0f172a;color:#f1f5f9;font-size:16px;outline:none}
+input:focus{border-color:#3b82f6}
+.res{margin-top:10px;max-height:260px;overflow-y:auto}
+.res button{display:block;width:100%;text-align:left;padding:12px;margin-bottom:6px;background:#0f172a;border:1px solid #334155;border-radius:10px;color:#e2e8f0;font-size:14px;cursor:pointer}
+.res button:active{background:#1e3a8a}
+.res small{color:#64748b;display:block;margin-top:2px}
+.big{width:100%;padding:20px;border:none;border-radius:14px;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;font-size:20px;font-weight:800;cursor:pointer;letter-spacing:1px}
+.big:active{transform:scale(.98)}
+.big.rojo{background:linear-gradient(135deg,#dc2626,#b91c1c);font-size:16px;padding:14px;margin-top:12px}
+.quien{text-align:center;margin-bottom:18px}
+.quien b{display:block;font-size:17px;color:#f8fafc}
+.quien small{color:#94a3b8}
+.candado{display:inline-block;margin-top:8px;font-size:11px;color:#64748b;background:#0f172a;border:1px solid #334155;padding:4px 10px;border-radius:999px}
+.ok{text-align:center}
+.ok .tilde{font-size:64px}
+.ok h2{color:#4ade80;margin:8px 0 4px}
+.ok .hora{font-size:42px;font-weight:800;color:#f8fafc;margin:8px 0}
+.err{background:#7f1d1d;color:#fecaca;padding:14px;border-radius:10px;margin-top:14px;font-size:14px;display:none;max-width:420px;text-align:center}
+.aviso{color:#94a3b8;font-size:13px;text-align:center;margin-top:16px}
+</style>
+</head>
+<body>
+<div class="logo">P.F.A. — J.P.R.M.</div>
+<h1>Registro de Presentismo</h1>
+<div class="oficina" id="ofi"></div>
+<div class="card" id="card">Cargando...</div>
+<div class="err" id="err"></div>
+<div class="aviso" id="aviso"></div>
+
+<script>
+// ================= CONFIGURAR =================
+const SUPABASE_URL = 'https://vzdnddywodwzvtbohymk.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_EYrQB6AUQZ_c_K3xS9hCVw_nQkdmI9S';
+// ==============================================
+
+const H = {'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=representation'};
+const api = (path, opt={}) => fetch(SUPABASE_URL+'/rest/v1/'+path,{headers:H,...opt}).then(r=>r.json());
+
+const params = new URLSearchParams(location.search);
+const OFICINA = (params.get('oficina')||'').replace(/_/g,' ').toUpperCase() || 'SIN OFICINA';
+document.getElementById('ofi').textContent = OFICINA;
+
+const card = document.getElementById('card');
+const errBox = document.getElementById('err');
+const hoy = () => new Date().toLocaleDateString('sv-SE',{timeZone:'America/Argentina/Buenos_Aires'});
+const horaAR = d => new Date(d).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Argentina/Buenos_Aires'});
+const mostrarError = m => {errBox.textContent=m; errBox.style.display='block'};
+const limpiarError = () => errBox.style.display='none';
+
+// ID unico del telefono (se genera una sola vez)
+let DEV = localStorage.getItem('jprm_dev');
+if(!DEV){ DEV = crypto.randomUUID(); localStorage.setItem('jprm_dev', DEV); }
+
+let yo = null;
+
+// Al abrir: consultar a que persona esta vinculado ESTE telefono (la base manda, no el localStorage)
+async function iniciar(){
+  const v = await api(`dispositivos?device_id=eq.${DEV}&select=personal_id,personal(id,jerarquia,apellido_nombre,oficina)`);
+  if(v && v.length && v[0].personal){
+    yo = v[0].personal;
+    pantallaFichar();
+  } else {
+    pantallaBusqueda();
+  }
+}
+
+function pantallaBusqueda(){
+  card.innerHTML = `<p style="margin-bottom:10px;color:#94a3b8;font-size:14px">Primera vez: buscate por apellido. <b style="color:#e2e8f0">Este teléfono quedará vinculado a tu nombre</b> y solo vos vas a poder fichar desde él.</p>
+  <input id="q" placeholder="Escribí tu apellido..." autocomplete="off"><div class="res" id="res"></div>`;
+  const q = document.getElementById('q'), res = document.getElementById('res');
+  let t;
+  q.oninput = () => { clearTimeout(t); t = setTimeout(async()=>{
+    if(q.value.trim().length<2){res.innerHTML='';return}
+    const rows = await api(`personal?apellido_nombre=ilike.*${encodeURIComponent(q.value.trim())}*&activo=eq.true&select=id,jerarquia,apellido_nombre,oficina&limit=10`);
+    res.innerHTML = (rows||[]).map(p=>`<button onclick='elegir(${JSON.stringify(p)})'>${p.apellido_nombre}<small>${p.jerarquia} — ${p.oficina}</small></button>`).join('') || '<small style="color:#64748b">Sin resultados</small>';
+  },300)};
+  q.focus();
+}
+
+// Vincular telefono <-> persona. Si la persona ya tiene otro telefono, la base lo rechaza.
+window.elegir = async p => {
+  limpiarError();
+  const r = await api('dispositivos',{method:'POST',body:JSON.stringify({device_id:DEV,personal_id:p.id})});
+  if(Array.isArray(r) && r.length){
+    yo = p;
+    pantallaFichar();
+  } else if(r && r.code==='23505'){
+    mostrarError(`⛔ ${p.apellido_nombre} ya está vinculado/a a otro teléfono. Cada persona solo puede fichar desde su propio celular. Si cambiaste de teléfono, pedí en Administración que te desvinculen.`);
+  } else {
+    mostrarError('No se pudo vincular. Verificá la conexión.');
+  }
+};
+
+async function pantallaFichar(){
+  card.innerHTML = `<div class="quien"><b>${yo.apellido_nombre}</b><small>${yo.jerarquia}</small><br>
+  <span class="candado">🔒 Vinculado a este teléfono</span></div>
+  <div id="accion">Cargando...</div>`;
+  const acc = document.getElementById('accion');
+  const f = await api(`fichajes?personal_id=eq.${yo.id}&fecha=eq.${hoy()}&select=*`);
+  if(f && f.length){
+    const reg = f[0];
+    if(reg.hora_salida){
+      acc.innerHTML = `<div class="ok"><div class="tilde">✅</div><h2>Jornada completa</h2><p style="color:#94a3b8">Entrada ${horaAR(reg.hora_entrada)} — Salida ${horaAR(reg.hora_salida)}</p></div>`;
+    } else {
+      acc.innerHTML = `<div class="ok"><div class="tilde">✅</div><h2>Ya estás presente</h2><p style="color:#94a3b8">Fichaste a las <b style="color:#fff">${horaAR(reg.hora_entrada)}</b> en ${reg.oficina}</p></div>
+      <button class="big rojo" onclick="salida(${reg.id})">REGISTRAR SALIDA</button>`;
+    }
+  } else {
+    acc.innerHTML = `<button class="big" onclick="entrada()">MARCAR PRESENTE</button>`;
+  }
+}
+
+window.entrada = async () => {
+  limpiarError();
+  const r = await api('fichajes',{method:'POST',body:JSON.stringify({personal_id:yo.id,oficina:OFICINA,fecha:hoy(),device_id:DEV})});
+  if(Array.isArray(r) && r.length){
+    card.querySelector('#accion').innerHTML = `<div class="ok"><div class="tilde">🎉</div><h2>¡Presente registrado!</h2><div class="hora">${horaAR(r[0].hora_entrada)}</div><p style="color:#94a3b8">${OFICINA}</p></div>`;
+    if(navigator.vibrate) navigator.vibrate(200);
+  } else if(r && r.code==='23505'){
+    mostrarError('⛔ Ya existe un presente registrado hoy para vos o para este teléfono. El presentismo se da una sola vez por día.');
+    pantallaFichar();
+  } else {
+    mostrarError('No se pudo registrar. Verificá la conexión o avisá en Administración.');
+  }
+};
+
+window.salida = async id => {
+  const r = await api(`fichajes?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({hora_salida:new Date().toISOString()})});
+  if(Array.isArray(r) && r.length) pantallaFichar(); else mostrarError('No se pudo registrar la salida.');
+};
+
+if(SUPABASE_URL.includes('TU-PROYECTO')){
+  document.getElementById('aviso').textContent = '⚠ Modo demo: falta configurar Supabase en el código.';
+  card.innerHTML = '<p style="color:#94a3b8;font-size:14px;text-align:center">Configurá SUPABASE_URL y SUPABASE_KEY para activar el fichaje.</p>';
+} else {
+  iniciar();
+}
+</script>
+</body>
+</html>

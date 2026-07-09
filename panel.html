@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel Presentismo JPRM</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,'Segoe UI',Roboto,sans-serif}
+body{background:#f1f5f9;color:#0f172a;padding:16px;max-width:900px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+h1{font-size:20px}
+h1 small{display:block;font-size:12px;color:#64748b;font-weight:400}
+.tabs{display:flex;gap:8px;margin-bottom:16px}
+.tabs button{flex:1;padding:10px;border:none;border-radius:10px;background:#e2e8f0;font-weight:700;cursor:pointer;font-size:14px}
+.tabs button.on{background:#1e3a8a;color:#fff}
+.tot{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;margin-bottom:16px}
+.tot div{background:#fff;border-radius:12px;padding:12px;text-align:center;border:1px solid #e2e8f0}
+.tot b{font-size:26px;display:block}
+.tot span{font-size:11px;color:#64748b;text-transform:uppercase}
+.tot .verde b{color:#16a34a}.tot .rojo b{color:#dc2626}.tot .azul b{color:#1e3a8a}
+.sec{background:#fff;border-radius:12px;border:1px solid #e2e8f0;margin-bottom:10px;overflow:hidden}
+.sec h3{background:#1e3a8a;color:#fff;padding:10px 14px;font-size:13px;letter-spacing:1px;display:flex;justify-content:space-between}
+.sec ul{list-style:none}
+.sec li{padding:9px 14px;border-bottom:1px solid #f1f5f9;font-size:14px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.sec li small{color:#64748b}
+.hora{color:#16a34a;font-weight:700;white-space:nowrap}
+.aus{color:#dc2626;font-weight:700;font-size:12px;white-space:nowrap}
+.nov{color:#d97706;font-weight:700;font-size:12px;white-space:nowrap}
+.acciones{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.acciones button{padding:12px 16px;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:14px}
+.b1{background:#16a34a;color:#fff}.b2{background:#25d366;color:#fff}.b3{background:#64748b;color:#fff}
+#qrs{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.qrcard{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;text-align:center}
+.qrcard h4{font-size:13px;margin-bottom:10px;letter-spacing:1px}
+.qrcard>div{display:flex;justify-content:center}
+.qrcard p{font-size:10px;color:#94a3b8;margin-top:8px;word-break:break-all}
+.warn{background:#fef3c7;border:1px solid #fbbf24;color:#92400e;padding:10px;border-radius:10px;font-size:13px;margin-bottom:14px}
+.fila-alta{display:grid;grid-template-columns:1fr 1.4fr 1fr .8fr auto;gap:6px;margin-top:10px}
+.fila-alta input,.fila-alta select,.hor-edit,.ofi-edit{padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;background:#fff}
+.bok{background:#16a34a;color:#fff;border:none;border-radius:8px;padding:9px 14px;font-weight:700;cursor:pointer}
+.hor-edit{width:110px;text-align:center;font-weight:700;color:#1e3a8a}
+.ofi-edit{max-width:170px}
+.hor-edit.ok,.ofi-edit.ok{border-color:#16a34a;background:#f0fdf4}
+@media(max-width:640px){.fila-alta{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Parte Diario Digital<small id="fecha"></small></h1>
+  <button class="b3" style="padding:10px 14px;border:none;border-radius:10px;color:#fff;background:#64748b;font-weight:700;cursor:pointer" onclick="cargar()">↻ Actualizar</button>
+</header>
+<div class="warn" id="warn" style="display:none">⚠ Falta configurar SUPABASE_URL y SUPABASE_KEY en el código. Mostrando datos de ejemplo.</div>
+<div class="tabs">
+  <button class="on" onclick="tab('parte',this)">📋 Parte</button>
+  <button onclick="tab('personal',this)">👥 Personal</button>
+  <button onclick="tab('qrs',this)">🔳 QRs</button>
+  <button onclick="tab('disp',this)">📱 Dispositivos</button>
+</div>
+
+<div id="vista-parte">
+  <div class="tot" id="totales"></div>
+  <div class="acciones">
+    <button class="b1" onclick="exportarExcel()">📊 Exportar Excel</button>
+    <button class="b2" onclick="copiarWhatsApp()">📱 Copiar p/ WhatsApp</button>
+  </div>
+  <div id="secciones"></div>
+</div>
+
+<div id="vista-personal" style="display:none">
+  <div class="sec" style="padding:14px">
+    <b style="font-size:14px">➕ Registrar persona nueva</b>
+    <div class="fila-alta">
+      <input id="np-jer" placeholder="Jerarquía (ej: AYUDANTE)">
+      <input id="np-nom" placeholder="APELLIDO, NOMBRE">
+      <select id="np-ofi"></select>
+      <input id="np-hor" placeholder="Horario (ej: 08 a 20)" value="08 a 20">
+      <button class="bok" onclick="agregarPersona()">Guardar</button>
+    </div>
+  </div>
+  <p style="font-size:13px;color:#64748b;margin:12px 0">Tocá el horario u oficina de cualquiera y modificalo — se guarda al instante y el parte lo toma automático.</p>
+  <div id="lista-personal"></div>
+</div>
+
+<div id="vista-disp" style="display:none">
+  <p style="font-size:13px;color:#64748b;margin-bottom:12px">Cada teléfono queda vinculado a una sola persona. Si alguien cambia de celular, desvinculalo acá y se registra de nuevo desde el teléfono nuevo.</p>
+  <div class="sec"><h3><span>TELÉFONOS VINCULADOS</span><span id="disp-count"></span></h3><ul id="disp-lista"></ul></div>
+</div>
+
+<div id="vista-qrs" style="display:none">
+  <p style="font-size:13px;color:#64748b;margin-bottom:12px">Imprimí cada QR y pegalo en la oficina. Para NFC: grabá la misma URL en una etiqueta NTAG213 con la app <b>NFC Tools</b> (Escribir → Añadir registro → URL).</p>
+  <div id="qrs"></div>
+</div>
+
+<script>
+// ================= CONFIGURAR =================
+const SUPABASE_URL = 'https://vzdnddywodwzvtbohymk.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_EYrQB6AUQZ_c_K3xS9hCVw_nQkdmI9S';
+const URL_FICHAJE = 'https://jprmpresentismo-max.github.io/presentismo/fichaje.html'; // donde subas fichaje.html
+// ==============================================
+
+const OFICINAS = ['JEFE DE SERVICIO','OFICINA DE ADMINISTRACION','GUARDIA','CUSTODIA EDILICIA','TRAMITES VARIOS','MESA DE ENTRADAS','FICHERO','EPA','DICTAMENES','GABINETE PSICOLOGICO PRESENCIAL','GABINETE PSICOLOGICO VIRTUAL','MEDICOS'];
+const TIPOS_NOV = ['LICENCIA ANUAL','LICENCIA MEDICA','ABANDONO DE SERVICIO EN TRAMITE','FRANCO DE SERVICIO','FRANCO AUTORIZADO'];
+
+const H = {'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY};
+const api = p => fetch(SUPABASE_URL+'/rest/v1/'+p,{headers:H}).then(r=>r.json());
+const hoy = () => new Date().toLocaleDateString('sv-SE',{timeZone:'America/Argentina/Buenos_Aires'});
+const horaAR = d => new Date(d).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Argentina/Buenos_Aires'});
+document.getElementById('fecha').textContent = new Date().toLocaleDateString('es-AR',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric',timeZone:'America/Argentina/Buenos_Aires'}).toUpperCase();
+
+let DATA = {personal:[],fichajes:[],novedades:[]};
+
+async function cargar(){
+  if(SUPABASE_URL.includes('TU-PROYECTO')){ document.getElementById('warn').style.display='block'; demo(); render(); return; }
+  const [p,f,n] = await Promise.all([
+    api('personal?activo=eq.true&select=*&order=apellido_nombre'),
+    api(`fichajes?fecha=eq.${hoy()}&select=*`),
+    api(`novedades?desde=lte.${hoy()}&or=(hasta.is.null,hasta.gte.${hoy()})&select=*`)
+  ]);
+  DATA = {personal:p||[],fichajes:f||[],novedades:n||[]};
+  render();
+}
+
+function demo(){
+  DATA.personal = [
+    {id:1,jerarquia:'PRINCIPAL',apellido_nombre:'GOMEZ, DANIELA',oficina:'GUARDIA',horario:'08 a 15'},
+    {id:2,jerarquia:'AYUDANTE',apellido_nombre:'RAMIREZ MIRANDA, ORIANA',oficina:'GUARDIA',horario:'08 a 20'},
+    {id:3,jerarquia:'SARGENTO',apellido_nombre:'OVEJERO, JOSE ALBERTO',oficina:'GUARDIA',horario:'14 a 20'},
+    {id:4,jerarquia:'SUBINSPECTOR',apellido_nombre:'SALTO, FLORENCIA',oficina:'MESA DE ENTRADAS',horario:'08 a 20'},
+    {id:5,jerarquia:'AYUDANTE',apellido_nombre:'LOPEZ, SUYAY',oficina:'MESA DE ENTRADAS',horario:'08 a 20'},
+    {id:6,jerarquia:'CABO',apellido_nombre:'LEON, EMILIANO IVAN',oficina:'GUARDIA',horario:'08 a 20'},
+    {id:7,jerarquia:'SUBINSPECTOR',apellido_nombre:'LUQUE, MAIRA',oficina:'EPA',horario:'08 a 20'},
+    {id:8,jerarquia:'CABO 1°',apellido_nombre:'CANEPA, FERNANDO',oficina:'EPA',horario:'08 a 20'}
+  ];
+  const t = new Date(); t.setHours(7,52);
+  DATA.fichajes = [
+    {personal_id:1,oficina:'GUARDIA',hora_entrada:t.toISOString()},
+    {personal_id:2,oficina:'GUARDIA',hora_entrada:new Date(t.getTime()+9*60000).toISOString()},
+    {personal_id:4,oficina:'MESA DE ENTRADAS',hora_entrada:new Date(t.getTime()+15*60000).toISOString()},
+    {personal_id:7,oficina:'EPA',hora_entrada:new Date(t.getTime()+3*60000).toISOString()}
+  ];
+  DATA.novedades = [{personal_id:6,tipo:'LICENCIA ANUAL',detalle:'25/06 - 05/07'},{personal_id:3,tipo:'FRANCO DE SERVICIO'}];
+}
+
+function estado(p){
+  const f = DATA.fichajes.find(x=>x.personal_id===p.id);
+  if(f) return {tipo:'PRESENTE',f};
+  const n = DATA.novedades.find(x=>x.personal_id===p.id);
+  if(n) return {tipo:'NOVEDAD',n};
+  return {tipo:'AUSENTE'};
+}
+
+function render(){
+  const total = DATA.personal.length;
+  const presentes = DATA.personal.filter(p=>estado(p).tipo==='PRESENTE').length;
+  const cuentaNov = t => DATA.personal.filter(p=>{const e=estado(p);return e.tipo==='NOVEDAD'&&e.n.tipo===t}).length;
+  const sinNov = DATA.personal.filter(p=>estado(p).tipo==='AUSENTE').length;
+  let html = `<div class="azul"><b>${total}</b><span>Total personal</span></div>
+    <div class="verde"><b>${presentes}</b><span>Presentes</span></div>
+    <div class="rojo"><b>${sinNov}</b><span>Sin fichar</span></div>`;
+  TIPOS_NOV.forEach(t=>{const c=cuentaNov(t); if(c) html+=`<div><b>${c}</b><span>${t}</span></div>`});
+  document.getElementById('totales').innerHTML = html;
+
+  const cont = document.getElementById('secciones');
+  cont.innerHTML = '';
+  const ofis = [...new Set([...OFICINAS, ...DATA.personal.map(p=>p.oficina)])];
+  ofis.forEach(o=>{
+    const gente = DATA.personal.filter(p=>p.oficina===o);
+    if(!gente.length) return;
+    const pres = gente.filter(p=>estado(p).tipo==='PRESENTE').length;
+    let lis = gente.map(p=>{
+      const e = estado(p);
+      const tag = e.tipo==='PRESENTE' ? `<span class="hora">✔ ${horaAR(e.f.hora_entrada)}${e.f.hora_salida?' → '+horaAR(e.f.hora_salida):''}</span>`
+        : e.tipo==='NOVEDAD' ? `<span class="nov">${e.n.tipo}${e.n.detalle?' ('+e.n.detalle+')':''}</span>`
+        : `<span class="aus">SIN FICHAR</span>`;
+      return `<li><span>${p.apellido_nombre} <span style="color:#1e3a8a;font-weight:700">(${p.horario||'08 a 20'})</span><br><small>${p.jerarquia}</small></span>${tag}</li>`;
+    }).join('');
+    cont.innerHTML += `<div class="sec"><h3><span>${o}</span><span>${pres}/${gente.length}</span></h3><ul>${lis}</ul></div>`;
+  });
+}
+
+function tab(v,btn){
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  ['parte','qrs','disp','personal'].forEach(x=>document.getElementById('vista-'+x).style.display = v===x?'block':'none');
+  if(v==='qrs' && !document.getElementById('qrs').children.length) generarQRs();
+  if(v==='disp') cargarDispositivos();
+  if(v==='personal') cargarPersonal();
+}
+
+function cargarPersonal(){
+  const sel = document.getElementById('np-ofi');
+  sel.innerHTML = OFICINAS.map(o=>`<option>${o}</option>`).join('');
+  const cont = document.getElementById('lista-personal');
+  const ofis = [...new Set([...OFICINAS, ...DATA.personal.map(p=>p.oficina)])];
+  cont.innerHTML = '';
+  ofis.forEach(o=>{
+    const gente = DATA.personal.filter(p=>p.oficina===o);
+    if(!gente.length) return;
+    const lis = gente.map(p=>`<li><span>${p.apellido_nombre}<br><small>${p.jerarquia}</small></span>
+      <span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <select class="ofi-edit" onchange="editar(${p.id},'oficina',this)">${ofis.map(x=>`<option ${x===p.oficina?'selected':''}>${x}</option>`).join('')}</select>
+      <input class="hor-edit" value="${p.horario||'08 a 20'}" onchange="editar(${p.id},'horario',this)">
+      </span></li>`).join('');
+    cont.innerHTML += `<div class="sec"><h3><span>${o}</span><span>${gente.length}</span></h3><ul>${lis}</ul></div>`;
+  });
+}
+
+window.editar = async (id,campo,el) => {
+  if(SUPABASE_URL.includes('TU-PROYECTO')){ el.classList.add('ok'); const p=DATA.personal.find(x=>x.id===id); if(p)p[campo]=el.value; render(); return; }
+  const r = await fetch(SUPABASE_URL+'/rest/v1/personal?id=eq.'+id,{method:'PATCH',headers:{...H,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({[campo]:el.value.trim()})}).then(x=>x.json());
+  if(Array.isArray(r)&&r.length){
+    el.classList.add('ok'); setTimeout(()=>el.classList.remove('ok'),1500);
+    const p = DATA.personal.find(x=>x.id===id); if(p) p[campo]=el.value.trim();
+    render();
+  } else alert('No se pudo guardar el cambio.');
+};
+
+window.agregarPersona = async () => {
+  const jer = document.getElementById('np-jer').value.trim().toUpperCase();
+  const nom = document.getElementById('np-nom').value.trim().toUpperCase();
+  const ofi = document.getElementById('np-ofi').value;
+  const hor = document.getElementById('np-hor').value.trim() || '08 a 20';
+  if(!jer||!nom){ alert('Completá jerarquía y nombre.'); return; }
+  if(SUPABASE_URL.includes('TU-PROYECTO')){
+    DATA.personal.push({id:Date.now(),jerarquia:jer,apellido_nombre:nom,oficina:ofi,horario:hor});
+    cargarPersonal(); render(); return;
+  }
+  const r = await fetch(SUPABASE_URL+'/rest/v1/personal',{method:'POST',headers:{...H,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({jerarquia:jer,apellido_nombre:nom,oficina:ofi,horario:hor})}).then(x=>x.json());
+  if(Array.isArray(r)&&r.length){
+    DATA.personal.push(r[0]);
+    document.getElementById('np-jer').value=''; document.getElementById('np-nom').value='';
+    cargarPersonal(); render();
+  } else alert('No se pudo agregar.');
+};
+
+async function cargarDispositivos(){
+  const lista = document.getElementById('disp-lista');
+  if(SUPABASE_URL.includes('TU-PROYECTO')){ lista.innerHTML='<li><small>Configurá Supabase para ver los dispositivos.</small></li>'; return; }
+  const rows = await api('dispositivos?select=device_id,creado,personal(id,jerarquia,apellido_nombre,oficina)&order=creado.desc');
+  document.getElementById('disp-count').textContent = (rows||[]).length;
+  lista.innerHTML = (rows||[]).map(d=>`<li><span>${d.personal.apellido_nombre}<br><small>${d.personal.jerarquia} — ${d.personal.oficina} · vinculado ${new Date(d.creado).toLocaleDateString('es-AR')}</small></span>
+    <button style="background:#dc2626;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-weight:700;cursor:pointer;font-size:12px" onclick="desvincular('${d.device_id}','${d.personal.apellido_nombre.replace(/'/g,"\\'")}')">Desvincular</button></li>`).join('') || '<li><small>Todavía no hay teléfonos vinculados.</small></li>';
+}
+
+window.desvincular = async (id,nombre) => {
+  if(!confirm(`¿Desvincular el teléfono de ${nombre}? Va a tener que registrarse de nuevo desde su celular.`)) return;
+  await fetch(SUPABASE_URL+'/rest/v1/dispositivos?device_id=eq.'+id,{method:'DELETE',headers:H});
+  cargarDispositivos();
+};
+
+function generarQRs(){
+  const cont = document.getElementById('qrs');
+  OFICINAS.forEach(o=>{
+    const url = URL_FICHAJE + '?oficina=' + encodeURIComponent(o.replace(/ /g,'_'));
+    const div = document.createElement('div');
+    div.className = 'qrcard';
+    div.innerHTML = `<h4>${o}</h4><div class="qrbox"></div><p>${url}</p>`;
+    cont.appendChild(div);
+    new QRCode(div.querySelector('.qrbox'),{text:url,width:160,height:160});
+  });
+}
+
+function filas(){
+  const rows = [];
+  const ofis = [...new Set([...OFICINAS, ...DATA.personal.map(p=>p.oficina)])];
+  ofis.forEach(o=>{
+    const gente = DATA.personal.filter(p=>p.oficina===o);
+    if(!gente.length) return;
+    rows.push({tipo:'sec',texto:o});
+    gente.forEach(p=>{
+      const e = estado(p);
+      const est = e.tipo==='PRESENTE' ? `PRESENTE (${horaAR(e.f.hora_entrada)}${e.f.hora_salida?' a '+horaAR(e.f.hora_salida):''})`
+        : e.tipo==='NOVEDAD' ? e.n.tipo + (e.n.detalle?' - '+e.n.detalle:'') : 'SIN FICHAR';
+      rows.push({tipo:'per',jer:p.jerarquia,nom:`${p.apellido_nombre} (${p.horario||'08 a 20'})`,est});
+    });
+  });
+  return rows;
+}
+
+function exportarExcel(){
+  const aoa = [['PARTE DIARIO — DIVISIÓN JUNTA PERMANENTE DE RECONOCIMIENTOS MÉDICOS'],[document.getElementById('fecha').textContent],[]];
+  filas().forEach(r=>{
+    if(r.tipo==='sec') aoa.push([],[r.texto.toUpperCase()]);
+    else aoa.push([r.jer,r.nom,r.est]);
+  });
+  aoa.push([]);
+  const total = DATA.personal.length;
+  const presentes = DATA.personal.filter(p=>estado(p).tipo==='PRESENTE').length;
+  aoa.push(['TOTAL DEL PERSONAL',total],['TOTAL PRESENTES',presentes]);
+  TIPOS_NOV.forEach(t=>{
+    const c = DATA.personal.filter(p=>{const e=estado(p);return e.tipo==='NOVEDAD'&&e.n.tipo===t}).length;
+    aoa.push([t,c]);
+  });
+  aoa.push(['SIN FICHAR',DATA.personal.filter(p=>estado(p).tipo==='AUSENTE').length]);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:30},{wch:35},{wch:30}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Parte');
+  XLSX.writeFile(wb, `PARTE_DIARIO_${hoy()}.xlsx`);
+}
+
+function copiarWhatsApp(){
+  const total = DATA.personal.length;
+  const presentes = DATA.personal.filter(p=>estado(p).tipo==='PRESENTE').length;
+  let txt = `*PARTE DIARIO J.P.R.M.*\n_${document.getElementById('fecha').textContent}_\n`;
+  filas().forEach(r=>{
+    if(r.tipo==='sec') txt += `\n*${r.texto}*\n`;
+    else txt += `• ${r.nom} — ${r.est}\n`;
+  });
+  txt += `\n*TOTAL:* ${total} | *PRESENTES:* ${presentes}`;
+  navigator.clipboard.writeText(txt).then(()=>alert('Copiado ✔ Pegalo en WhatsApp'));
+}
+
+cargar();
+</script>
+</body>
+</html>
