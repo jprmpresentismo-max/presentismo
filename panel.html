@@ -64,6 +64,7 @@ h1 small{display:block;font-size:12px;color:#64748b;font-weight:400}
   <button onclick="tab('personal',this)">👥 Personal</button>
   <button onclick="tab('qrs',this)">🔳 QRs</button>
   <button onclick="tab('disp',this)">📱 Dispositivos</button>
+  <button onclick="tab('nov',this)">📌 Novedades</button>
 </div>
 
 <div id="vista-parte">
@@ -94,6 +95,22 @@ h1 small{display:block;font-size:12px;color:#64748b;font-weight:400}
 <div id="vista-disp" style="display:none">
   <p style="font-size:13px;color:#64748b;margin-bottom:12px">Cada teléfono queda vinculado a una sola persona. Si alguien cambia de celular, desvinculalo acá y se registra de nuevo desde el teléfono nuevo.</p>
   <div class="sec"><h3><span>TELÉFONOS VINCULADOS</span><span id="disp-count"></span></h3><ul id="disp-lista"></ul></div>
+</div>
+
+<div id="vista-nov" style="display:none">
+  <div class="sec" style="padding:14px">
+    <b style="font-size:14px">➕ Cargar novedad (franco autorizado, vacaciones, licencia médica...)</b>
+    <div class="fila-alta" style="grid-template-columns:1.4fr 1.2fr .8fr .8fr 1fr auto">
+      <select id="nv-per"></select>
+      <select id="nv-tipo"></select>
+      <input id="nv-desde" type="date">
+      <input id="nv-hasta" type="date">
+      <input id="nv-det" placeholder="Detalle (opcional)">
+      <button class="bok" onclick="guardarNovedad()">Guardar</button>
+    </div>
+    <p style="font-size:12px;color:#94a3b8;margin-top:8px">Para un franco de un solo día dejá <b>desde</b> y <b>hasta</b> con la misma fecha. Para vacaciones o licencia médica poné el rango completo (de qué fecha a qué fecha). Si todavía no hay fecha de fin, dejá "hasta" vacío. Mientras la novedad esté vigente, la persona figura así en el parte en lugar de "SIN FICHAR".</p>
+  </div>
+  <div class="sec"><h3><span>NOVEDADES VIGENTES Y FUTURAS</span><span id="nv-count"></span></h3><ul id="nv-lista"></ul></div>
 </div>
 
 <div id="vista-qrs" style="display:none">
@@ -196,7 +213,7 @@ function render(){
       const e = estado(p);
       const tag = e.tipo==='PRESENTE' ? `<span class="hora">✔ ${horaParte(e.f,p)}${e.f.hora_salida?' → '+horaAR(e.f.hora_salida):''}</span>`
         : e.tipo==='NOVEDAD' ? `<span class="nov">${e.n.tipo}${e.n.detalle?' ('+e.n.detalle+')':''}</span>`
-        : `<span class="aus">SIN FICHAR</span>`;
+        : `<span class="aus">SIN FICHAR</span> <button onclick="francoRapido(${p.id})" title="Marcar FRANCO AUTORIZADO hoy" style="margin-left:4px;background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:4px 9px;font-size:11px;font-weight:800;cursor:pointer;vertical-align:middle">FA ✔</button>`;
       return `<li><span>${p.apellido_nombre} <span style="color:#1e3a8a;font-weight:700">(${p.horario||'08 a 20'})</span><br><small>${p.jerarquia}</small></span>${tag}</li>`;
     }).join('');
     cont.innerHTML += `<div class="sec"><h3><span>${o}</span><span>${pres}/${gente.length}</span></h3><ul>${lis}</ul></div>`;
@@ -206,8 +223,9 @@ function render(){
 function tab(v,btn){
   document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('on'));
   btn.classList.add('on');
-  ['parte','qrs','disp','personal'].forEach(x=>document.getElementById('vista-'+x).style.display = v===x?'block':'none');
+  ['parte','qrs','disp','personal','nov'].forEach(x=>document.getElementById('vista-'+x).style.display = v===x?'block':'none');
   if(v==='qrs' && !document.getElementById('qrs').children.length) generarQRs();
+  if(v==='nov') cargarNovedades();
   if(v==='disp') cargarDispositivos();
   if(v==='personal') cargarPersonal();
 }
@@ -348,6 +366,49 @@ function copiarWhatsApp(){
   txt += `\n*TOTAL:* ${total} | *PRESENTES:* ${presentes}`;
   navigator.clipboard.writeText(txt).then(()=>alert('Copiado ✔ Pegalo en WhatsApp'));
 }
+
+// ===== Novedades: cargar/eliminar (franco autorizado, vacaciones, licencias) =====
+function cargarNovedades(){
+  const selP=document.getElementById('nv-per');
+  selP.innerHTML='<option value="">— Elegí la persona —</option>'+[...DATA.personal].sort((a,b)=>a.apellido_nombre.localeCompare(b.apellido_nombre)).map(x=>`<option value="${x.id}">${x.apellido_nombre}</option>`).join('');
+  const selT=document.getElementById('nv-tipo');
+  selT.innerHTML=TIPOS_NOV.map(t=>`<option value="${t}">${t==='LICENCIA ANUAL'?'LICENCIA ANUAL (VACACIONES)':t}</option>`).join('');
+  if(!document.getElementById('nv-desde').value) document.getElementById('nv-desde').value=hoy();
+  listaNovedades();
+}
+async function listaNovedades(){
+  const ns=await api(`novedades?or=(hasta.is.null,hasta.gte.${hoy()})&select=*&order=desde`);
+  document.getElementById('nv-count').textContent=(ns||[]).length;
+  document.getElementById('nv-lista').innerHTML=(ns||[]).map(n=>{
+    const px=DATA.personal.find(x=>x.id===n.personal_id)||{apellido_nombre:'#'+n.personal_id};
+    return `<li><span>${px.apellido_nombre}<br><small><b>${n.tipo}</b>${n.detalle?' — '+n.detalle:''} · ${n.desde}${n.hasta?' al '+n.hasta:' (sin fecha de fin)'}</small></span><button onclick="eliminarNovedad(${n.id})" style="background:#dc2626;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-weight:700;cursor:pointer">Eliminar</button></li>`;
+  }).join('') || '<li><small>Sin novedades cargadas.</small></li>';
+}
+window.guardarNovedad=async()=>{
+  const pid=+document.getElementById('nv-per').value;
+  const tipo=document.getElementById('nv-tipo').value;
+  const desde=document.getElementById('nv-desde').value;
+  const hasta=document.getElementById('nv-hasta').value;
+  const det=document.getElementById('nv-det').value.trim();
+  if(!pid||!desde){alert('Elegí la persona y la fecha "desde".');return;}
+  if(hasta && hasta<desde){alert('"Hasta" no puede ser anterior a "desde".');return;}
+  const r=await fetch(SUPABASE_URL+'/rest/v1/novedades',{method:'POST',headers:{...H,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({personal_id:pid,tipo,detalle:det||null,desde,hasta:hasta||null})}).then(x=>x.json());
+  if(Array.isArray(r)&&r.length){
+    document.getElementById('nv-det').value=''; document.getElementById('nv-hasta').value='';
+    await cargar(); listaNovedades();
+  } else alert('No se pudo guardar la novedad.');
+};
+window.eliminarNovedad=async id=>{
+  if(!confirm('¿Eliminar esta novedad?'))return;
+  await fetch(SUPABASE_URL+'/rest/v1/novedades?id=eq.'+id,{method:'DELETE',headers:H});
+  await cargar(); listaNovedades();
+};
+window.francoRapido=async id=>{
+  const px=DATA.personal.find(x=>x.id===id);
+  if(!confirm(`¿Marcar FRANCO AUTORIZADO hoy para ${px.apellido_nombre}?`))return;
+  await fetch(SUPABASE_URL+'/rest/v1/novedades',{method:'POST',headers:{...H,'Content-Type':'application/json'},body:JSON.stringify({personal_id:id,tipo:'FRANCO AUTORIZADO',desde:hoy(),hasta:hoy()})});
+  cargar();
+};
 
 // ===== Limpiar fichajes del dia (con doble confirmacion) =====
 window.limpiarHoy = async () => {

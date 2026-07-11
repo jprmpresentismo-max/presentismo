@@ -104,20 +104,30 @@ function pantallaBusqueda(){
 window.elegir = p => {
   limpiarError();
   window._sel = p;
+  const horas = Array.from({length:24},(_,i)=>String(i).padStart(2,'0'));
+  const nums = (p.horario||'08 a 20').match(/\d{1,2}/g)||['8','20'];
+  const hde0 = String(+nums[0]).padStart(2,'0');
+  const hha0 = nums.length>1 ? String(+nums[1]).padStart(2,'0') : 'TERMINAR';
+  const st = 'width:100%;padding:14px;border-radius:10px;border:1px solid #475569;background:#0f172a;color:#f1f5f9;font-size:16px';
   card.innerHTML = `<div class="quien"><b>${p.apellido_nombre}</b><small>${p.jerarquia}</small></div>
   <p style="color:#94a3b8;font-size:14px;margin-bottom:8px">Confirmá a qué oficina pertenecés:</p>
-  <select id="sel-ofi" style="width:100%;padding:14px;border-radius:10px;border:1px solid #475569;background:#0f172a;color:#f1f5f9;font-size:16px">${OFICINAS.map(o=>`<option ${o===p.oficina?'selected':''}>${o}</option>`).join('')}</select>
-  <button class="big" style="margin-top:14px" onclick="confirmarOficina()">CONFIRMAR Y VINCULAR</button>`;
+  <select id="sel-ofi" style="${st}">${OFICINAS.map(o=>`<option ${o===p.oficina?'selected':''}>${o}</option>`).join('')}</select>
+  <p style="color:#94a3b8;font-size:14px;margin:14px 0 8px">Tu horario de trabajo:</p>
+  <div style="display:flex;gap:8px;align-items:center">
+    <select id="sel-hde" style="${st};flex:1">${horas.map(h=>`<option ${h===hde0?'selected':''}>${h}</option>`).join('')}</select>
+    <span style="color:#94a3b8;font-weight:700">a</span>
+    <select id="sel-hha" style="${st};flex:1">${horas.map(h=>`<option ${h===hha0?'selected':''}>${h}</option>`).join('')}<option ${hha0==='TERMINAR'?'selected':''}>TERMINAR</option></select>
+  </div>
+  <button class="big" style="margin-top:16px" onclick="confirmarOficina()">CONFIRMAR Y VINCULAR</button>`;
 };
 
 window.confirmarOficina = async () => {
   limpiarError();
   const p = window._sel;
   const ofi = document.getElementById('sel-ofi').value;
-  if(ofi !== p.oficina){
-    await fetch(SUPABASE_URL+'/rest/v1/personal?id=eq.'+p.id,{method:'PATCH',headers:H,body:JSON.stringify({oficina:ofi})});
-    p.oficina = ofi;
-  }
+  const horario = document.getElementById('sel-hde').value + ' a ' + document.getElementById('sel-hha').value;
+  await fetch(SUPABASE_URL+'/rest/v1/personal?id=eq.'+p.id,{method:'PATCH',headers:H,body:JSON.stringify({oficina:ofi,horario})});
+  p.oficina = ofi; p.horario = horario;
   const r = await api('dispositivos',{method:'POST',body:JSON.stringify({device_id:DEV,personal_id:p.id})});
   if(Array.isArray(r) && r.length){
     yo = p;
