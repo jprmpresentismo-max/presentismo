@@ -127,7 +127,7 @@ const SUPABASE_KEY = 'sb_publishable_EYrQB6AUQZ_c_K3xS9hCVw_nQkdmI9S';
 const URL_FICHAJE = 'https://jprmpresentismo-max.github.io/presentismo/fichaje.html'; // donde subas fichaje.html
 // ==============================================
 
-const OFICINAS = ['JEFE DE SERVICIO','OFICINA DE ADMINISTRACION','GUARDIA','CUSTODIA EDILICIA','TRAMITES VARIOS','MESA DE ENTRADAS','FICHERO','EPA','DICTAMENES','GABINETE PSICOLOGICO PRESENCIAL','GABINETE PSICOLOGICO VIRTUAL','MEDICOS','OFICINA DE MANTENIMIENTO Y SOPORTE TECNOLOGICO'];
+const OFICINAS = ['OFICIALES JEFES','JEFE DE SERVICIO','OFICINA DE ADMINISTRACION','GUARDIA','CUSTODIA EDILICIA','TRAMITES VARIOS','MESA DE ENTRADAS','FICHERO','EPA','DICTAMENES','GABINETE PSICOLOGICO PRESENCIAL','GABINETE PSICOLOGICO VIRTUAL','MEDICOS','OFICINA DE MANTENIMIENTO Y SOPORTE TECNOLOGICO'];
 const TIPOS_NOV = ['LICENCIA ANUAL','LICENCIA MEDICA','ABANDONO DE SERVICIO EN TRAMITE','FRANCO DE SERVICIO','FRANCO AUTORIZADO'];
 
 const H = {'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY};
@@ -243,6 +243,7 @@ function cargarPersonal(){
       <span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       <select class="ofi-edit" onchange="editar(${p.id},'oficina',this)">${ofis.map(x=>`<option ${x===p.oficina?'selected':''}>${x}</option>`).join('')}</select>
       <input class="hor-edit" value="${p.horario||'08 a 20'}" onchange="editar(${p.id},'horario',this)">
+      <button onclick="eliminarPersona(${p.id})" title="Eliminar del listado" style="background:#dc2626;color:#fff;border:none;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer">🗑</button>
       </span></li>`).join('');
     cont.innerHTML += `<div class="sec"><h3><span>${o}</span><span>${gente.length}</span></h3><ul>${lis}</ul></div>`;
   });
@@ -366,6 +367,17 @@ function copiarWhatsApp(){
   txt += `\n*TOTAL:* ${total} | *PRESENTES:* ${presentes}`;
   navigator.clipboard.writeText(txt).then(()=>alert('Copiado ✔ Pegalo en WhatsApp'));
 }
+
+// ===== Eliminar persona (baja logica: conserva el historial de fichajes) =====
+window.eliminarPersona = async id => {
+  const px = DATA.personal.find(x=>x.id===id);
+  if(!confirm(`¿Eliminar a ${px.apellido_nombre} del listado? Deja de aparecer en el parte y en la búsqueda de fichaje. Su historial se conserva.`)) return;
+  const r = await fetch(SUPABASE_URL+'/rest/v1/personal?id=eq.'+id,{method:'PATCH',headers:{...H,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({activo:false})}).then(x=>x.json());
+  if(Array.isArray(r)&&r.length){
+    await fetch(SUPABASE_URL+'/rest/v1/dispositivos?personal_id=eq.'+id,{method:'DELETE',headers:H});
+    await cargar(); cargarPersonal();
+  } else alert('No se pudo eliminar.');
+};
 
 // ===== Novedades: cargar/eliminar (franco autorizado, vacaciones, licencias) =====
 function cargarNovedades(){
