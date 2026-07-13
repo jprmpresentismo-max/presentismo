@@ -48,7 +48,7 @@ h1 small{display:block;font-size:12px;color:#64748b;font-weight:400}
 </head>
 <body>
 <div id="lock" style="position:fixed;inset:0;background:#0f172a;z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;padding:20px">
-  <div style="color:#64748b;letter-spacing:3px;font-size:13px">P.F.A. — J.P.R.M.</div>
+  <div style="color:#64748b;letter-spacing:3px;font-size:13px">P.F.A. - J.P.R.M.</div>
   <b style="color:#f8fafc;font-size:18px">Panel de Presentismo</b>
   <input id="lock-pass" type="password" placeholder="Clave de acceso" autocomplete="off" style="padding:14px;border-radius:10px;border:1px solid #475569;background:#1e293b;color:#f1f5f9;font-size:16px;width:min(320px,90vw);text-align:center;outline:none">
   <button id="lock-btn" style="padding:12px 28px;border:none;border-radius:10px;background:#1d4ed8;color:#fff;font-weight:800;font-size:15px;cursor:pointer">ENTRAR</button>
@@ -108,13 +108,13 @@ h1 small{display:block;font-size:12px;color:#64748b;font-weight:400}
       <input id="nv-det" placeholder="Detalle (opcional)">
       <button class="bok" onclick="guardarNovedad()">Guardar</button>
     </div>
-    <p style="font-size:12px;color:#94a3b8;margin-top:8px">Para un franco de un solo día dejá <b>desde</b> y <b>hasta</b> con la misma fecha. Para vacaciones o licencia médica poné el rango completo (de qué fecha a qué fecha). Si todavía no hay fecha de fin, dejá "hasta" vacío. Mientras la novedad esté vigente, la persona figura así en el parte en lugar de "SIN FICHAR".</p>
+    <p style="font-size:12px;color:#94a3b8;margin-top:8px">Para un franco de un solo día dejá <b>desde</b> y <b>hasta</b> con la misma fecha. Para vacaciones o licencia médica poné el rango completo. Si no hay fecha de fin, dejá "hasta" vacío. Mientras la novedad esté vigente, la persona figura así en el parte en lugar de "SIN FICHAR".</p>
   </div>
   <div class="sec"><h3><span>NOVEDADES VIGENTES Y FUTURAS</span><span id="nv-count"></span></h3><ul id="nv-lista"></ul></div>
 </div>
 
 <div id="vista-qrs" style="display:none">
-  <p style="font-size:13px;color:#64748b;margin-bottom:12px">Hay un <b>único QR general</b>: imprimilo y pegalo donde haga falta (entrada, oficinas, etc.). Cada persona queda asociada a su oficina al registrarse la primera vez.</p>
+  <p style="font-size:13px;color:#64748b;margin-bottom:12px">Hay un <b>único QR general</b>: imprimilo y pegalo donde haga falta. Cada persona queda asociada a su oficina al registrarse la primera vez.</p>
   <button class="b1" style="margin-bottom:6px" onclick="grabarNFC()">📲 Grabar etiqueta NFC</button>
   <p style="font-size:12px;color:#94a3b8;margin-bottom:12px">La grabación NFC funciona desde un celular <b>Android con Chrome</b> y NFC activado (etiquetas NTAG213). Desde PC o iPhone usá la app <b>NFC Tools</b> con la misma URL.</p>
   <div id="qrs"></div>
@@ -138,7 +138,7 @@ document.getElementById('fecha').textContent = new Date().toLocaleDateString('es
 
 let DATA = {personal:[],fichajes:[],novedades:[]};
 
-// Hora a mostrar en el parte: si ficho dentro de su rango horario, figura la hora de entrada asignada
+// Hora a mostrar: si ficho dentro de su rango horario, figura la hora de entrada asignada
 function horaParte(f,p){
   const [hh,mm] = new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Argentina/Buenos_Aires'}).format(new Date(f.hora_entrada)).split(':').map(Number);
   const t = hh + mm/60;
@@ -211,7 +211,8 @@ function render(){
     const pres = gente.filter(p=>estado(p).tipo==='PRESENTE').length;
     let lis = gente.map(p=>{
       const e = estado(p);
-      const tag = e.tipo==='PRESENTE' ? `<span class="hora">✔ ${horaParte(e.f,p)}${e.f.hora_salida?' → '+horaAR(e.f.hora_salida):''}</span>`
+      const esVirt = e.tipo==='PRESENTE' && DATA.novedades.some(x=>x.personal_id===p.id && x.tipo==='VIRTUAL');
+      const tag = e.tipo==='PRESENTE' ? `<span class="hora">✔ ${horaParte(e.f,p)}${esVirt?' <b style="color:#7c3aed">(VIRTUAL)</b>':''}${e.f.hora_salida?' → '+horaAR(e.f.hora_salida):''}</span> <button onclick="toggleVirtual(${p.id})" title="Marcar/desmarcar trabajo virtual de hoy" style="margin-left:4px;background:${esVirt?'#7c3aed':'#e2e8f0'};color:${esVirt?'#fff':'#475569'};border:none;border-radius:6px;padding:4px 9px;font-size:11px;font-weight:800;cursor:pointer;vertical-align:middle">${esVirt?'✔ VIRTUAL':'VIRTUAL'}</button>`
         : e.tipo==='NOVEDAD' ? `<span class="nov">${e.n.tipo}${e.n.detalle?' ('+e.n.detalle+')':''}</span>`
         : `<span class="aus">SIN FICHAR</span> <button onclick="francoRapido(${p.id})" title="Marcar FRANCO AUTORIZADO hoy" style="margin-left:4px;background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:4px 9px;font-size:11px;font-weight:800;cursor:pointer;vertical-align:middle">FA ✔</button>`;
       return `<li><span>${p.apellido_nombre} <span style="color:#1e3a8a;font-weight:700">(${p.horario||'08 a 20'})</span><br><small>${p.jerarquia}</small></span>${tag}</li>`;
@@ -301,7 +302,6 @@ function generarQRs(){
   new QRCode(div.querySelector('.qrbox'),{text:URL_FICHAJE,width:220,height:220});
 }
 
-// Grabar etiqueta NFC con la URL general de fichaje (Chrome en Android con NFC)
 window.grabarNFC = async () => {
   if(!('NDEFReader' in window)){
     alert('Para grabar NFC abri el panel desde un celular Android con Chrome y NFC activado. Desde PC o iPhone usa la app NFC Tools (Escribir > Anadir registro > URL > '+URL_FICHAJE+').');
@@ -326,7 +326,8 @@ function filas(){
     rows.push({tipo:'sec',texto:o});
     gente.forEach(p=>{
       const e = estado(p);
-      const est = e.tipo==='PRESENTE' ? `PRESENTE (${horaParte(e.f,p)}${e.f.hora_salida?' a '+horaAR(e.f.hora_salida):''})`
+      const esVirt = e.tipo==='PRESENTE' && DATA.novedades.some(x=>x.personal_id===p.id && x.tipo==='VIRTUAL');
+      const est = e.tipo==='PRESENTE' ? `PRESENTE${esVirt?' VIRTUAL':''} (${horaParte(e.f,p)}${e.f.hora_salida?' a '+horaAR(e.f.hora_salida):''})`
         : e.tipo==='NOVEDAD' ? e.n.tipo + (e.n.detalle?' - '+e.n.detalle:'') : 'SIN FICHAR';
       rows.push({tipo:'per',jer:p.jerarquia,nom:`${p.apellido_nombre} (${p.horario||'08 a 20'})`,est});
     });
@@ -368,7 +369,18 @@ function copiarWhatsApp(){
   navigator.clipboard.writeText(txt).then(()=>alert('Copiado ✔ Pegalo en WhatsApp'));
 }
 
-// ===== Eliminar persona (baja logica: conserva el historial de fichajes) =====
+// ===== Tilde VIRTUAL =====
+window.toggleVirtual = async pid => {
+  const nv = DATA.novedades.find(x=>x.personal_id===pid && x.tipo==='VIRTUAL');
+  if(nv){
+    await fetch(SUPABASE_URL+'/rest/v1/novedades?id=eq.'+nv.id,{method:'DELETE',headers:H});
+  } else {
+    await fetch(SUPABASE_URL+'/rest/v1/novedades',{method:'POST',headers:{...H,'Content-Type':'application/json'},body:JSON.stringify({personal_id:pid,tipo:'VIRTUAL',desde:hoy(),hasta:hoy()})});
+  }
+  cargar();
+};
+
+// ===== Eliminar persona (baja logica) =====
 window.eliminarPersona = async id => {
   const px = DATA.personal.find(x=>x.id===id);
   if(!confirm(`¿Eliminar a ${px.apellido_nombre} del listado? Deja de aparecer en el parte y en la búsqueda de fichaje. Su historial se conserva.`)) return;
@@ -379,7 +391,7 @@ window.eliminarPersona = async id => {
   } else alert('No se pudo eliminar.');
 };
 
-// ===== Novedades: cargar/eliminar (franco autorizado, vacaciones, licencias) =====
+// ===== Novedades =====
 function cargarNovedades(){
   const selP=document.getElementById('nv-per');
   selP.innerHTML='<option value="">— Elegí la persona —</option>'+[...DATA.personal].sort((a,b)=>a.apellido_nombre.localeCompare(b.apellido_nombre)).map(x=>`<option value="${x.id}">${x.apellido_nombre}</option>`).join('');
@@ -422,7 +434,7 @@ window.francoRapido=async id=>{
   cargar();
 };
 
-// ===== Limpiar fichajes del dia (con doble confirmacion) =====
+// ===== Limpiar fichajes del dia =====
 window.limpiarHoy = async () => {
   const n = DATA.fichajes.length;
   if(!n){ alert('No hay fichajes cargados hoy.'); return; }
@@ -433,7 +445,7 @@ window.limpiarHoy = async () => {
   else { alert('No se pudo borrar. Verifica la conexion.'); }
 };
 
-// ===== Clave de acceso al panel (SHA-256; la sesion dura hasta cerrar el navegador) =====
+// ===== Clave de acceso =====
 const PANEL_HASH = '4cbd885b9339a750192b4c3e9122e8940d87a48b0586322adae9729ba50a6b24';
 async function sha256hex(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
 async function desbloquear(){
