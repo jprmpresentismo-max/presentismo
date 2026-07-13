@@ -56,7 +56,10 @@ h1 small{display:block;font-size:12px;color:#64748b;font-weight:400}
 </div>
 <header>
   <h1>Parte Diario Digital<small id="fecha"></small></h1>
+  <span style="display:flex;gap:8px;align-items:center">
+  <input type="date" id="dia-parte" title="Ver el parte de otro día" style="padding:9px;border:1px solid #cbd5e1;border-radius:10px;font-size:14px;background:#fff" onchange="cambiarDia(this.value)">
   <button class="b3" style="padding:10px 14px;border:none;border-radius:10px;color:#fff;background:#64748b;font-weight:700;cursor:pointer" onclick="cargar()">↻ Actualizar</button>
+  </span>
 </header>
 <div class="warn" id="warn" style="display:none">⚠ Falta configurar SUPABASE_URL y SUPABASE_KEY en el código. Mostrando datos de ejemplo.</div>
 <div class="tabs">
@@ -134,7 +137,14 @@ const H = {'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY};
 const api = p => fetch(SUPABASE_URL+'/rest/v1/'+p,{headers:H}).then(r=>r.json());
 const hoy = () => new Date().toLocaleDateString('sv-SE',{timeZone:'America/Argentina/Buenos_Aires'});
 const horaAR = d => new Date(d).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Argentina/Buenos_Aires'});
-document.getElementById('fecha').textContent = new Date().toLocaleDateString('es-AR',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric',timeZone:'America/Argentina/Buenos_Aires'}).toUpperCase();
+let FECHA = hoy();
+function setFechaLabel(){
+  const d = new Date(FECHA+'T12:00:00');
+  document.getElementById('fecha').textContent = d.toLocaleDateString('es-AR',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'}).toUpperCase() + (FECHA!==hoy()?'  ·  PARTE HISTÓRICO':'');
+}
+setFechaLabel();
+document.getElementById('dia-parte').value = FECHA;
+window.cambiarDia = d => { if(!d) return; FECHA = d; setFechaLabel(); cargar(); };
 
 let DATA = {personal:[],fichajes:[],novedades:[]};
 
@@ -155,8 +165,8 @@ async function cargar(){
   if(SUPABASE_URL.includes('TU-PROYECTO')){ document.getElementById('warn').style.display='block'; demo(); render(); return; }
   const [p,f,n] = await Promise.all([
     api('personal?activo=eq.true&select=*&order=apellido_nombre'),
-    api(`fichajes?fecha=eq.${hoy()}&select=*`),
-    api(`novedades?desde=lte.${hoy()}&or=(hasta.is.null,hasta.gte.${hoy()})&select=*`)
+    api(`fichajes?fecha=eq.${FECHA}&select=*`),
+    api(`novedades?desde=lte.${FECHA}&or=(hasta.is.null,hasta.gte.${FECHA})&select=*`)
   ]);
   DATA = {personal:p||[],fichajes:f||[],novedades:n||[]};
   render();
@@ -354,7 +364,7 @@ function exportarExcel(){
   ws['!cols'] = [{wch:30},{wch:35},{wch:30}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Parte');
-  XLSX.writeFile(wb, `PARTE_DIARIO_${hoy()}.xlsx`);
+  XLSX.writeFile(wb, `PARTE_DIARIO_${FECHA}.xlsx`);
 }
 
 function copiarWhatsApp(){
@@ -375,7 +385,7 @@ window.toggleVirtual = async pid => {
   if(nv){
     await fetch(SUPABASE_URL+'/rest/v1/novedades?id=eq.'+nv.id,{method:'DELETE',headers:H});
   } else {
-    await fetch(SUPABASE_URL+'/rest/v1/novedades',{method:'POST',headers:{...H,'Content-Type':'application/json'},body:JSON.stringify({personal_id:pid,tipo:'VIRTUAL',desde:hoy(),hasta:hoy()})});
+    await fetch(SUPABASE_URL+'/rest/v1/novedades',{method:'POST',headers:{...H,'Content-Type':'application/json'},body:JSON.stringify({personal_id:pid,tipo:'VIRTUAL',desde:FECHA,hasta:FECHA})});
   }
   cargar();
 };
@@ -430,12 +440,13 @@ window.eliminarNovedad=async id=>{
 window.francoRapido=async id=>{
   const px=DATA.personal.find(x=>x.id===id);
   if(!confirm(`¿Marcar FRANCO AUTORIZADO hoy para ${px.apellido_nombre}?`))return;
-  await fetch(SUPABASE_URL+'/rest/v1/novedades',{method:'POST',headers:{...H,'Content-Type':'application/json'},body:JSON.stringify({personal_id:id,tipo:'FRANCO AUTORIZADO',desde:hoy(),hasta:hoy()})});
+  await fetch(SUPABASE_URL+'/rest/v1/novedades',{method:'POST',headers:{...H,'Content-Type':'application/json'},body:JSON.stringify({personal_id:id,tipo:'FRANCO AUTORIZADO',desde:FECHA,hasta:FECHA})});
   cargar();
 };
 
 // ===== Limpiar fichajes del dia =====
 window.limpiarHoy = async () => {
+  if(FECHA!==hoy()){ alert('El borrado solo está disponible para el día de HOY. Volvé a la fecha actual con el calendario.'); return; }
   const n = DATA.fichajes.length;
   if(!n){ alert('No hay fichajes cargados hoy.'); return; }
   if(!confirm(`Vas a borrar ${n} fichaje(s) de HOY (${hoy()}). Los presentes del dia quedan en cero y cada persona puede volver a fichar. ¿Continuar?`)) return;
