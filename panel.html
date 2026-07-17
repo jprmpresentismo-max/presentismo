@@ -119,6 +119,13 @@ h1 small{display:block;font-size:12px;color:#64748b;font-weight:400}
 <div id="vista-qrs" style="display:none">
   <p style="font-size:13px;color:#64748b;margin-bottom:12px">Hay un <b>único QR general</b>: imprimilo y pegalo donde haga falta. Cada persona queda asociada a su oficina al registrarse la primera vez.</p>
   <button class="b1" style="margin-bottom:6px" onclick="grabarNFC()">📲 Grabar etiqueta NFC</button>
+  <div class="fila-alta" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin:6px 0">
+    <input id="lt-serv" placeholder="Servicio a cumplir (ej: CONSULTORIOS)" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;background:#fff">
+    <input id="lt-hor" value="08 a 20" placeholder="Horario (ej: 08 a 14)" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;background:#fff;text-align:center">
+    <button class="b2" onclick="linkTemporal(24)">🔗 Link 24 hs</button>
+    <button class="b2" onclick="linkTemporal(48)">🔗 Link 48 hs</button>
+  </div>
+  <p style="font-size:12px;color:#94a3b8;margin-bottom:12px">El <b>link temporal</b> es para el personal que da el presente en otra dependencia: poné el <b>servicio</b> y el <b>horario</b> que van a cumplir, generalo y mandalo por WhatsApp. Vence solo a las 24/48 hs y sirve aunque la persona ya esté registrada. En el parte figura con ese servicio y horario.</p>
   <p style="font-size:12px;color:#94a3b8;margin-bottom:12px">La grabación NFC funciona desde un celular <b>Android con Chrome</b> y NFC activado (etiquetas NTAG213). Desde PC o iPhone usá la app <b>NFC Tools</b> con la misma URL.</p>
   <div id="qrs"></div>
 </div>
@@ -152,7 +159,10 @@ let DATA = {personal:[],fichajes:[],novedades:[]};
 function horaParte(f,p){
   const [hh,mm] = new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Argentina/Buenos_Aires'}).format(new Date(f.hora_entrada)).split(':').map(Number);
   const t = hh + mm/60;
-  const nums = (p.horario||'08 a 20').match(/\d{1,2}/g);
+  let horBase = p.horario||'08 a 20';
+  const mp = (f.oficina||'').match(/· *(\d{1,2} a [A-Z0-9]+)/i);
+  if(mp) horBase = mp[1];
+  const nums = (horBase).match(/\d{1,2}/g);
   if(nums && nums.length){
     const E = +nums[0]; const F = nums.length>1 ? +nums[1] : null;
     const dentro = F===null ? t>=E : (F>E ? (t>=E && t<F) : (t>=E || t<F));
@@ -222,7 +232,7 @@ function render(){
     let lis = gente.map(p=>{
       const e = estado(p);
       const esVirt = e.tipo==='PRESENTE' && DATA.novedades.some(x=>x.personal_id===p.id && x.tipo==='VIRTUAL');
-      const tag = e.tipo==='PRESENTE' ? `<span class="hora">✔ ${horaParte(e.f,p)}${esVirt?' <b style="color:#7c3aed">(VIRTUAL)</b>':''}${e.f.hora_salida?' → '+horaAR(e.f.hora_salida):''}</span> <button onclick="toggleVirtual(${p.id})" title="Marcar/desmarcar trabajo virtual de hoy" style="margin-left:4px;background:${esVirt?'#7c3aed':'#e2e8f0'};color:${esVirt?'#fff':'#475569'};border:none;border-radius:6px;padding:4px 9px;font-size:11px;font-weight:800;cursor:pointer;vertical-align:middle">${esVirt?'✔ VIRTUAL':'VIRTUAL'}</button>`
+      const tag = e.tipo==='PRESENTE' ? `<span class="hora">✔ ${horaParte(e.f,p)}${esVirt?' <b style="color:#7c3aed">(VIRTUAL)</b>':''}${e.f.oficina&&e.f.oficina!==p.oficina?` <small style="color:#b45309;font-weight:800">EN ${e.f.oficina}</small>`:''}${e.f.hora_salida?' → '+horaAR(e.f.hora_salida):''}</span> <button onclick="toggleVirtual(${p.id})" title="Marcar/desmarcar trabajo virtual de hoy" style="margin-left:4px;background:${esVirt?'#7c3aed':'#e2e8f0'};color:${esVirt?'#fff':'#475569'};border:none;border-radius:6px;padding:4px 9px;font-size:11px;font-weight:800;cursor:pointer;vertical-align:middle">${esVirt?'✔ VIRTUAL':'VIRTUAL'}</button>`
         : e.tipo==='NOVEDAD' ? `<span class="nov">${e.n.tipo}${e.n.detalle?' ('+e.n.detalle+')':''}</span>`
         : `<span class="aus">SIN FICHAR</span> <button onclick="francoRapido(${p.id})" title="Marcar FRANCO AUTORIZADO hoy" style="margin-left:4px;background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:4px 9px;font-size:11px;font-weight:800;cursor:pointer;vertical-align:middle">FA ✔</button>`;
       return `<li><span>${p.apellido_nombre} <span style="color:#1e3a8a;font-weight:700">(${p.horario||'08 a 20'})</span><br><small>${p.jerarquia}</small></span>${tag}</li>`;
@@ -337,7 +347,8 @@ function filas(){
     gente.forEach(p=>{
       const e = estado(p);
       const esVirt = e.tipo==='PRESENTE' && DATA.novedades.some(x=>x.personal_id===p.id && x.tipo==='VIRTUAL');
-      const est = e.tipo==='PRESENTE' ? `PRESENTE${esVirt?' VIRTUAL':''} (${horaParte(e.f,p)}${e.f.hora_salida?' a '+horaAR(e.f.hora_salida):''})`
+      const otro = e.tipo==='PRESENTE' && e.f.oficina && e.f.oficina!==p.oficina ? ' EN '+e.f.oficina : '';
+      const est = e.tipo==='PRESENTE' ? `PRESENTE${esVirt?' VIRTUAL':''} (${horaParte(e.f,p)}${e.f.hora_salida?' a '+horaAR(e.f.hora_salida):''})${otro}`
         : e.tipo==='NOVEDAD' ? e.n.tipo + (e.n.detalle?' - '+e.n.detalle:'') : 'SIN FICHAR';
       rows.push({tipo:'per',jer:p.jerarquia,nom:`${p.apellido_nombre} (${p.horario||'08 a 20'})`,est});
     });
@@ -454,6 +465,17 @@ window.limpiarHoy = async () => {
   const r = await fetch(SUPABASE_URL+`/rest/v1/fichajes?fecha=eq.${hoy()}`,{method:'DELETE',headers:H});
   if(r.ok){ alert('Fichajes de hoy borrados.'); cargar(); }
   else { alert('No se pudo borrar. Verifica la conexion.'); }
+};
+
+// ===== Link temporal de fichaje (24/48 hs) =====
+window.linkTemporal = async h => {
+  const serv = (document.getElementById('lt-serv').value||'').trim().toUpperCase();
+  const hor = (document.getElementById('lt-hor').value||'08 a 20').trim();
+  const exp = Date.now() + h*3600*1000;
+  const firma = (await sha256hex('JPRM-PASE-'+exp+'|'+serv+'|'+hor)).slice(0,16);
+  const url = URL_FICHAJE + '?pase=' + exp + '.' + firma + '&serv=' + encodeURIComponent(serv) + '&hor=' + encodeURIComponent(hor);
+  try{ await navigator.clipboard.writeText(url); }catch(e){}
+  prompt('Link temporal de '+h+' hs'+(serv?' — '+serv:'')+' ('+hor+'). Vence '+new Date(exp).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'. Ya quedó copiado, pegalo en WhatsApp:', url);
 };
 
 // ===== Clave de acceso =====

@@ -161,9 +161,9 @@ async function pantallaFichar(){
 
 window.entrada = async () => {
   limpiarError();
-  const r = await api('fichajes',{method:'POST',body:JSON.stringify({personal_id:yo.id,oficina:yo.oficina,fecha:hoy(),device_id:DEV})});
+  const r = await api('fichajes',{method:'POST',body:JSON.stringify({personal_id:yo.id,oficina:PASE?((PASE.serv||yo.oficina)+(PASE.hor?' · '+PASE.hor:'')):yo.oficina,fecha:hoy(),device_id:DEV})});
   if(Array.isArray(r) && r.length){
-    card.querySelector('#accion').innerHTML = `<div class="ok"><div class="tilde">🎉</div><h2>¡Presente registrado!</h2><div class="hora">${horaMostrar(r[0].hora_entrada, yo.horario)}</div><p style="color:#94a3b8">${yo.oficina}</p></div>`;
+    card.querySelector('#accion').innerHTML = `<div class="ok"><div class="tilde">🎉</div><h2>¡Presente registrado!</h2><div class="hora">${horaMostrar(r[0].hora_entrada, PASE&&PASE.hor?PASE.hor:yo.horario)}</div><p style="color:#94a3b8">${yo.oficina}</p></div>`;
     if(navigator.vibrate) navigator.vibrate(200);
   } else if(r && r.code==='23505'){
     mostrarError('⛔ Ya existe un presente registrado hoy para vos o para este teléfono. El presentismo se da una sola vez por día.');
@@ -178,11 +178,37 @@ window.salida = async id => {
   if(Array.isArray(r) && r.length) pantallaFichar(); else mostrarError('No se pudo registrar la salida.');
 };
 
+async function sha256hex(x){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(x));return [...new Uint8Array(b)].map(v=>v.toString(16).padStart(2,'0')).join('')}
+
+let PASE = null;
+async function arrancar(){
+  const qs = new URLSearchParams(location.search);
+  const pase = qs.get('pase');
+  if(pase){
+    const serv = qs.get('serv')||'';
+    const hor = qs.get('hor')||'';
+    const [exp,firma] = pase.split('.');
+    const ok = exp && firma && (await sha256hex('JPRM-PASE-'+exp+'|'+serv+'|'+hor)).slice(0,16)===firma;
+    if(!ok){
+      card.innerHTML = '<p style="color:#fca5a5;font-size:15px;text-align:center">⛔ Este link no es válido. Pedí uno nuevo en Administración.</p>';
+      return;
+    }
+    if(Date.now() > +exp){
+      card.innerHTML = '<p style="color:#fca5a5;font-size:15px;text-align:center">⌛ Este link temporal ya venció.<br><br>Pedí uno nuevo en Administración.</p>';
+      return;
+    }
+    PASE = {serv, hor};
+    document.getElementById('aviso').textContent = '🔗 Link temporal' + (serv?' — '+serv:'') + (hor?' ('+hor+')':'') + ' · válido hasta ' + new Date(+exp).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) + ' hs';
+    if(serv) document.getElementById('ofi').textContent = serv;
+  }
+  iniciar();
+}
+
 if(SUPABASE_URL.includes('TU-PROYECTO')){
   document.getElementById('aviso').textContent = '⚠ Modo demo: falta configurar Supabase en el código.';
   card.innerHTML = '<p style="color:#94a3b8;font-size:14px;text-align:center">Configurá SUPABASE_URL y SUPABASE_KEY para activar el fichaje.</p>';
 } else {
-  iniciar();
+  arrancar();
 }
 </script>
 </body>
