@@ -140,7 +140,11 @@ window.confirmarOficina = async () => {
 };
 
 async function pantallaFichar(){
-  document.getElementById('ofi').textContent = yo.oficina || 'PRESENTISMO GENERAL';
+  if(VIRT && !/PSICOLOG/i.test(yo.oficina||'')){
+    card.innerHTML = `<div class="quien"><b>${yo.apellido_nombre}</b><small>${yo.jerarquia}</small></div><p style="color:#fca5a5;font-size:15px;text-align:center">⛔ Este link es exclusivo del personal de los gabinetes psicológicos. Fichá con el QR de la dependencia.</p>`;
+    return;
+  }
+  if(!VIRT) document.getElementById('ofi').textContent = yo.oficina || 'PRESENTISMO GENERAL';
   card.innerHTML = `<div class="quien"><b>${yo.apellido_nombre}</b><small>${yo.jerarquia}</small><br>
   <span class="candado">🔒 Vinculado a este teléfono</span></div>
   <div id="accion">Cargando...</div>`;
@@ -161,6 +165,12 @@ async function pantallaFichar(){
 
 window.entrada = async () => {
   limpiarError();
+  if(VIRT){
+    const ya = await api(`novedades?personal_id=eq.${yo.id}&tipo=eq.VIRTUAL&desde=eq.${hoy()}&select=id`);
+    if(!ya || !ya.length){
+      await api('novedades',{method:'POST',body:JSON.stringify({personal_id:yo.id,tipo:'VIRTUAL',desde:hoy(),hasta:hoy()})});
+    }
+  }
   const r = await api('fichajes',{method:'POST',body:JSON.stringify({personal_id:yo.id,oficina:PASE?((PASE.serv||yo.oficina)+(PASE.hor?' · '+PASE.hor:'')):yo.oficina,fecha:hoy(),device_id:DEV})});
   if(Array.isArray(r) && r.length){
     card.querySelector('#accion').innerHTML = `<div class="ok"><div class="tilde">🎉</div><h2>¡Presente registrado!</h2><div class="hora">${PASE?horaAR(r[0].hora_entrada):horaMostrar(r[0].hora_entrada, yo.horario)}</div><p style="color:#94a3b8">${yo.oficina}</p></div>`;
@@ -181,8 +191,20 @@ window.salida = async id => {
 async function sha256hex(x){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(x));return [...new Uint8Array(b)].map(v=>v.toString(16).padStart(2,'0')).join('')}
 
 let PASE = null;
+let VIRT = false;
 async function arrancar(){
   const qs = new URLSearchParams(location.search);
+  const tokenVirtual = qs.get('virtual');
+  if(tokenVirtual){
+    const ok = (await sha256hex('JPRM-VIRTUAL-PSICO')).slice(0,16) === tokenVirtual;
+    if(!ok){
+      card.innerHTML = '<p style="color:#fca5a5;font-size:15px;text-align:center">⛔ Este link no es válido. Pedí el link correcto en Administración.</p>';
+      return;
+    }
+    VIRT = true;
+    document.getElementById('ofi').textContent = 'PSICOLOGÍA — VIRTUAL';
+    document.getElementById('aviso').textContent = '🏠 Link de trabajo virtual — exclusivo del personal de Psicología';
+  }
   const pase = qs.get('pase');
   if(pase){
     const serv = qs.get('serv')||'';

@@ -119,6 +119,8 @@ h1 small{display:block;font-size:12px;color:#64748b;font-weight:400}
 <div id="vista-qrs" style="display:none">
   <p style="font-size:13px;color:#64748b;margin-bottom:12px">Hay un <b>único QR general</b>: imprimilo y pegalo donde haga falta. Cada persona queda asociada a su oficina al registrarse la primera vez.</p>
   <button class="b1" style="margin-bottom:6px" onclick="grabarNFC()">📲 Grabar etiqueta NFC</button>
+  <button class="b1" style="margin-bottom:6px;background:#7c3aed" onclick="copiarLinkPsico()">🏠 Copiar link fijo — Psicología Virtual</button>
+  <p style="font-size:12px;color:#94a3b8;margin-bottom:12px">Link <b>permanente</b> para el grupo de Psicología: se los pasás una sola vez y cuando trabajan virtual fichan desde casa con ese link — quedan marcadas <b style="color:#7c3aed">(VIRTUAL)</b> automáticamente en el parte. Solo funciona para el personal de los gabinetes psicológicos.</p>
   <div class="fila-alta" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin:6px 0">
     <input id="lt-serv" placeholder="Servicio a cumplir (ej: CONSULTORIOS)" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;background:#fff">
     <input id="lt-hor" value="08 a 20" placeholder="Horario (ej: 08 a 14)" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;background:#fff;text-align:center">
@@ -464,6 +466,13 @@ window.limpiarHoy = async () => {
   const r = await fetch(SUPABASE_URL+`/rest/v1/fichajes?fecha=eq.${hoy()}`,{method:'DELETE',headers:H});
   if(r.ok){ alert('Fichajes de hoy borrados.'); cargar(); }
   else { alert('No se pudo borrar. Verifica la conexion.'); }
+};
+
+// ===== Link fijo de Psicologia Virtual =====
+window.copiarLinkPsico = async () => {
+  const url = URL_FICHAJE + '?virtual=' + (await sha256hex('JPRM-VIRTUAL-PSICO')).slice(0,16);
+  try{ await navigator.clipboard.writeText(url); }catch(e){}
+  prompt('Link fijo de Psicología Virtual (no vence). Ya quedó copiado, pegalo en el grupo de WhatsApp:', url);
 };
 
 // ===== Link temporal de fichaje (24/48 hs) =====
