@@ -63,7 +63,7 @@ function horaMostrar(horaIso, horario){
   if(nums && nums.length){
     const E = +nums[0]; const F = nums.length>1 ? +nums[1] : null;
     const dentro = F===null ? t>=E : (F>E ? (t>=E && t<F) : (t>=E || t<F));
-    if(dentro) return String(E).padStart(2,'0')+':00';
+    if(E===8 && dentro) return '08:00';
   }
   return horaAR(horaIso);
 }
@@ -163,7 +163,7 @@ window.entrada = async () => {
   limpiarError();
   const r = await api('fichajes',{method:'POST',body:JSON.stringify({personal_id:yo.id,oficina:PASE?((PASE.serv||yo.oficina)+(PASE.hor?' · '+PASE.hor:'')):yo.oficina,fecha:hoy(),device_id:DEV})});
   if(Array.isArray(r) && r.length){
-    card.querySelector('#accion').innerHTML = `<div class="ok"><div class="tilde">🎉</div><h2>¡Presente registrado!</h2><div class="hora">${horaMostrar(r[0].hora_entrada, PASE&&PASE.hor?PASE.hor:yo.horario)}</div><p style="color:#94a3b8">${yo.oficina}</p></div>`;
+    card.querySelector('#accion').innerHTML = `<div class="ok"><div class="tilde">🎉</div><h2>¡Presente registrado!</h2><div class="hora">${PASE?horaAR(r[0].hora_entrada):horaMostrar(r[0].hora_entrada, yo.horario)}</div><p style="color:#94a3b8">${yo.oficina}</p></div>`;
     if(navigator.vibrate) navigator.vibrate(200);
   } else if(r && r.code==='23505'){
     mostrarError('⛔ Ya existe un presente registrado hoy para vos o para este teléfono. El presentismo se da una sola vez por día.');
