@@ -88,7 +88,7 @@ async function iniciar(){
 }
 
 function pantallaBusqueda(){
-  card.innerHTML = `<p style="margin-bottom:10px;color:#94a3b8;font-size:14px">Primera vez: buscate por apellido. <b style="color:#e2e8f0">Este teléfono quedará vinculado a tu nombre</b> y solo vos vas a poder fichar desde él.</p>
+  card.innerHTML = `<p style="margin-bottom:10px;color:#94a3b8;font-size:14px"><b style="color:#fbbf24">¿Ya te habías registrado y te aparece esta pantalla?</b> Estás en otro navegador: abrí el link en Chrome/Safari (desde WhatsApp: ⋮ → "Abrir en el navegador").<br><br>Primera vez: buscate por apellido. <b style="color:#e2e8f0">Este teléfono quedará vinculado a tu nombre</b> y solo vos vas a poder fichar desde él.</p>
   <input id="q" placeholder="Escribí tu apellido..." autocomplete="off"><div class="res" id="res"></div>`;
   const q = document.getElementById('q'), res = document.getElementById('res');
   let t;
@@ -133,7 +133,7 @@ window.confirmarOficina = async () => {
     yo = p;
     pantallaFichar();
   } else if(r && r.code==='23505'){
-    mostrarError(`⛔ ${p.apellido_nombre} ya está vinculado/a a otro teléfono. Cada persona solo puede fichar desde su propio celular. Si cambiaste de teléfono, pedí en Administración que te desvinculen.`);
+    mostrarError(`⛔ ${p.apellido_nombre} ya está vinculado/a a otro teléfono. ¿Abriste el link desde WhatsApp? Tu registro quedó en el navegador del celular: tocá los tres puntitos (⋮) arriba a la derecha y elegí "Abrir en el navegador" (Chrome/Safari). Si cambiaste de teléfono, pedí en Administración que te desvinculen.`);
   } else {
     mostrarError('No se pudo vincular. Verificá la conexión.');
   }
@@ -173,7 +173,7 @@ window.entrada = async () => {
   }
   const r = await api('fichajes',{method:'POST',body:JSON.stringify({personal_id:yo.id,oficina:PASE?((PASE.serv||yo.oficina)+(PASE.hor?' · '+PASE.hor:'')):yo.oficina,fecha:hoy(),device_id:DEV})});
   if(Array.isArray(r) && r.length){
-    card.querySelector('#accion').innerHTML = `<div class="ok"><div class="tilde">🎉</div><h2>¡Presente registrado!</h2><div class="hora">${PASE?horaAR(r[0].hora_entrada):horaMostrar(r[0].hora_entrada, yo.horario)}</div><p style="color:#94a3b8">${yo.oficina}</p></div>`;
+    card.querySelector('#accion').innerHTML = `<div class="ok"><div class="tilde">🎉</div><h2>¡Presente registrado!</h2><div class="hora">${(()=>{const m=PASE&&PASE.hor?PASE.hor.match(/^([0-9]{1,2})(?:[.:h]([0-9]{1,2}))?/):null; return m?String(+m[1]).padStart(2,'0')+':'+String(+(m[2]||0)).padStart(2,'0'):(PASE?horaAR(r[0].hora_entrada):horaMostrar(r[0].hora_entrada, yo.horario))})()}</div><p style="color:#94a3b8">${yo.oficina}</p></div>`;
     if(navigator.vibrate) navigator.vibrate(200);
   } else if(r && r.code==='23505'){
     mostrarError('⛔ Ya existe un presente registrado hoy para vos o para este teléfono. El presentismo se da una sola vez por día.');
