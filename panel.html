@@ -174,7 +174,6 @@ function horaParte(f,p){
   if(nums && nums.length){
     const E = +nums[0]; const F = nums.length>1 ? +nums[1] : null;
     const dentro = F===null ? t>=E : (F>E ? (t>=E && t<F) : (t>=E || t<F));
-    if(E===8 && dentro) return '08:00';
   }
   return horaAR(f.hora_entrada);
 }
