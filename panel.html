@@ -97,6 +97,7 @@ h1 small{display:block;font-size:12px;color:#64748b;font-weight:400}
 
 <div id="vista-disp" style="display:none">
   <p style="font-size:13px;color:#64748b;margin-bottom:12px">Cada teléfono queda vinculado a una sola persona. Si alguien cambia de celular, desvinculalo acá y se registra de nuevo desde el teléfono nuevo.</p>
+  <input id="disp-buscar" placeholder="🔍 Buscar por apellido, jerarquía u oficina..." oninput="filtrarDispositivos()" style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;font-size:14px;background:#fff;margin-bottom:10px">
   <div class="sec"><h3><span>TELÉFONOS VINCULADOS</span><span id="disp-count"></span></h3><ul id="disp-lista"></ul></div>
 </div>
 
@@ -310,13 +311,22 @@ window.agregarPersona = async () => {
   } else alert('No se pudo agregar.');
 };
 
+let DISPOSITIVOS = [];
 async function cargarDispositivos(){
   const lista = document.getElementById('disp-lista');
   if(SUPABASE_URL.includes('TU-PROYECTO')){ lista.innerHTML='<li><small>Configurá Supabase para ver los dispositivos.</small></li>'; return; }
-  const rows = await api('dispositivos?select=device_id,creado,personal(id,jerarquia,apellido_nombre,oficina)&order=creado.desc');
+  DISPOSITIVOS = await api('dispositivos?select=device_id,creado,personal(id,jerarquia,apellido_nombre,oficina)&order=creado.desc') || [];
+  renderDispositivos(DISPOSITIVOS);
+}
+window.filtrarDispositivos = () => {
+  const q = document.getElementById('disp-buscar').value.trim().toLowerCase();
+  renderDispositivos(!q ? DISPOSITIVOS : DISPOSITIVOS.filter(d => (d.personal.apellido_nombre+' '+d.personal.jerarquia+' '+d.personal.oficina).toLowerCase().includes(q)));
+};
+function renderDispositivos(rows){
+  const lista = document.getElementById('disp-lista');
   document.getElementById('disp-count').textContent = (rows||[]).length;
   lista.innerHTML = (rows||[]).map(d=>`<li><span>${d.personal.apellido_nombre}<br><small>${d.personal.jerarquia} — ${d.personal.oficina} · vinculado ${new Date(d.creado).toLocaleDateString('es-AR')}</small></span>
-    <button style="background:#dc2626;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-weight:700;cursor:pointer;font-size:12px" onclick="desvincular('${d.device_id}','${d.personal.apellido_nombre.replace(/'/g,"\\'")}')">Desvincular</button></li>`).join('') || '<li><small>Todavía no hay teléfonos vinculados.</small></li>';
+    <button style="background:#dc2626;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-weight:700;cursor:pointer;font-size:12px" onclick="desvincular('${d.device_id}','${d.personal.apellido_nombre.replace(/'/g,"\\'")}')">Desvincular</button></li>`).join('') || '<li><small>Sin resultados.</small></li>';
 }
 
 window.desvincular = async (id,nombre) => {
