@@ -354,7 +354,7 @@ function filas(){
   const rows = [];
   const ofis = [...new Set([...OFICINAS, ...DATA.personal.map(p=>ofiDia(p))])];
   ofis.forEach(o=>{
-    const gente = DATA.personal.filter(p=>ofiDia(p)===o);
+    const gente = DATA.personal.filter(p=>ofiDia(p)===o && estado(p).tipo!=='AUSENTE');
     if(!gente.length) return;
     rows.push({tipo:'sec',texto:o});
     gente.forEach(p=>{
