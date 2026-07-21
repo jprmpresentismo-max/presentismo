@@ -277,6 +277,7 @@ function cargarPersonal(){
       <span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       <select class="ofi-edit" onchange="editar(${p.id},'oficina',this)">${ofis.map(x=>`<option ${x===p.oficina?'selected':''}>${x}</option>`).join('')}</select>
       <input class="hor-edit" value="${p.horario||'08 a 20'}" onchange="editar(${p.id},'horario',this)">
+      <button onclick="editarDatos(${p.id})" title="Editar nombre y jerarquía" style="background:#1d4ed8;color:#fff;border:none;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer">✏️</button>
       <button onclick="eliminarPersona(${p.id})" title="Eliminar del listado" style="background:#dc2626;color:#fff;border:none;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer">🗑</button>
       </span></li>`).join('');
     cont.innerHTML += `<div class="sec"><h3><span>${o}</span><span>${gente.length}</span></h3><ul>${lis}</ul></div>`;
@@ -421,6 +422,22 @@ window.toggleVirtual = async pid => {
     await fetch(SUPABASE_URL+'/rest/v1/novedades',{method:'POST',headers:{...H,'Content-Type':'application/json'},body:JSON.stringify({personal_id:pid,tipo:'VIRTUAL',desde:FECHA,hasta:FECHA})});
   }
   cargar();
+};
+
+// ===== Editar nombre y jerarquia =====
+window.editarDatos = async id => {
+  const px = DATA.personal.find(x=>x.id===id);
+  const nom = prompt('Apellido y nombre:', px.apellido_nombre);
+  if(nom===null) return;
+  const jer = prompt('Jerarquía:', px.jerarquia);
+  if(jer===null) return;
+  const body={};
+  if(nom.trim() && nom.trim().toUpperCase()!==px.apellido_nombre) body.apellido_nombre=nom.trim().toUpperCase();
+  if(jer.trim() && jer.trim().toUpperCase()!==px.jerarquia) body.jerarquia=jer.trim().toUpperCase();
+  if(!Object.keys(body).length) return;
+  const r=await fetch(SUPABASE_URL+'/rest/v1/personal?id=eq.'+id,{method:'PATCH',headers:{...H,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(body)}).then(x=>x.json());
+  if(Array.isArray(r)&&r.length){ Object.assign(px, body); render(); cargarPersonal(); }
+  else alert('No se pudo guardar el cambio.');
 };
 
 // ===== Eliminar persona (baja logica) =====
