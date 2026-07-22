@@ -219,7 +219,7 @@ const ofiDia = p => {
 function estado(p){
   const f = DATA.fichajes.find(x=>x.personal_id===p.id);
   if(f) return {tipo:'PRESENTE',f};
-  const n = DATA.novedades.find(x=>x.personal_id===p.id && x.tipo!=='VIRTUAL');
+  const n = DATA.novedades.find(x=>x.personal_id===p.id && x.tipo!=='VIRTUAL' && x.tipo!=='RETIRO ANTICIPADO');
   if(n) return {tipo:'NOVEDAD',n};
   return {tipo:'AUSENTE'};
 }
@@ -245,7 +245,8 @@ function render(){
     let lis = gente.map(p=>{
       const e = estado(p);
       const esVirt = e.tipo==='PRESENTE' && DATA.novedades.some(x=>x.personal_id===p.id && x.tipo==='VIRTUAL');
-      const tag = e.tipo==='PRESENTE' ? `<span class="hora">✔ ${horaParte(e.f,p)}${esVirt?' <b style="color:#7c3aed">(VIRTUAL)</b>':''}${e.f.oficina&&e.f.oficina!==p.oficina?` <small style="color:#b45309;font-weight:800">(${e.f.oficina.includes('·')?e.f.oficina.split('·')[1].trim():''} — es de ${p.oficina})</small>`:''}${e.f.hora_salida?' → '+horaAR(e.f.hora_salida):''}</span> <button onclick="toggleVirtual(${p.id})" title="Marcar/desmarcar trabajo virtual de hoy" style="margin-left:4px;background:${esVirt?'#7c3aed':'#e2e8f0'};color:${esVirt?'#fff':'#475569'};border:none;border-radius:6px;padding:4px 9px;font-size:11px;font-weight:800;cursor:pointer;vertical-align:middle">${esVirt?'✔ VIRTUAL':'VIRTUAL'}</button>`
+      const ret = e.tipo==='PRESENTE' ? DATA.novedades.find(x=>x.personal_id===p.id && x.tipo==='RETIRO ANTICIPADO') : null;
+      const tag = e.tipo==='PRESENTE' ? `<span class="hora">✔ ${horaParte(e.f,p)}${esVirt?' <b style="color:#7c3aed">(VIRTUAL)</b>':''}${e.f.oficina&&e.f.oficina!==p.oficina?` <small style="color:#b45309;font-weight:800">(${e.f.oficina.includes('·')?e.f.oficina.split('·')[1].trim():''} — es de ${p.oficina})</small>`:''}${e.f.hora_salida&&!ret?' → '+horaAR(e.f.hora_salida):''}${ret?` <b style="color:#dc2626">SE RETIRÓ ${ret.detalle||''}</b>`:''}</span> <button onclick="retiroAnticipado(${p.id})" title="Marcar retiro anticipado" style="margin-left:4px;background:${ret?'#dc2626':'#e2e8f0'};color:${ret?'#fff':'#475569'};border:none;border-radius:6px;padding:4px 9px;font-size:11px;font-weight:800;cursor:pointer;vertical-align:middle">🚪</button> <button onclick="toggleVirtual(${p.id})" title="Marcar/desmarcar trabajo virtual de hoy" style="margin-left:4px;background:${esVirt?'#7c3aed':'#e2e8f0'};color:${esVirt?'#fff':'#475569'};border:none;border-radius:6px;padding:4px 9px;font-size:11px;font-weight:800;cursor:pointer;vertical-align:middle">${esVirt?'✔ VIRTUAL':'VIRTUAL'}</button>`
         : e.tipo==='NOVEDAD' ? `<span class="nov">${e.n.tipo}${e.n.detalle?' ('+e.n.detalle+')':''} <small style="font-weight:700">· ${fmtF(e.n.desde)}${e.n.hasta?' al '+fmtF(e.n.hasta):' (sin fecha de fin)'}</small></span>`
         : `<span class="aus">SIN FICHAR</span> <button onclick="francoRapido(${p.id})" title="Marcar FRANCO AUTORIZADO hoy" style="margin-left:4px;background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:4px 9px;font-size:11px;font-weight:800;cursor:pointer;vertical-align:middle">FA ✔</button>`;
       return `<li><span>${p.apellido_nombre} <span style="color:#1e3a8a;font-weight:700">(${p.horario||'08 a 20'})</span><br><small>${p.jerarquia}</small></span>${tag}</li>`;
@@ -371,7 +372,8 @@ function filas(){
       const e = estado(p);
       const esVirt = e.tipo==='PRESENTE' && DATA.novedades.some(x=>x.personal_id===p.id && x.tipo==='VIRTUAL');
       const otro = e.tipo==='PRESENTE' && e.f.oficina && e.f.oficina!==p.oficina ? ' EN '+e.f.oficina : '';
-      const est = e.tipo==='PRESENTE' ? `PRESENTE${esVirt?' VIRTUAL':''} (${horaParte(e.f,p)}${e.f.hora_salida?' a '+horaAR(e.f.hora_salida):''})${otro}`
+      const ret = e.tipo==='PRESENTE' ? DATA.novedades.find(x=>x.personal_id===p.id && x.tipo==='RETIRO ANTICIPADO') : null;
+      const est = e.tipo==='PRESENTE' ? `PRESENTE${esVirt?' VIRTUAL':''} (${horaParte(e.f,p)}${e.f.hora_salida&&!ret?' a '+horaAR(e.f.hora_salida):''})${otro}${ret?' — SE RETIRO '+(ret.detalle||''):''}`
         : e.tipo==='NOVEDAD' ? e.n.tipo + (e.n.detalle?' - '+e.n.detalle:'') + ' (del '+fmtF(e.n.desde)+(e.n.hasta?' al '+fmtF(e.n.hasta):', sin fecha de fin')+')' : 'SIN FICHAR';
       rows.push({tipo:'per',jer:p.jerarquia,nom:`${p.apellido_nombre} (${p.horario||'08 a 20'})`,est});
     });
@@ -438,6 +440,25 @@ window.editarDatos = async id => {
   const r=await fetch(SUPABASE_URL+'/rest/v1/personal?id=eq.'+id,{method:'PATCH',headers:{...H,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(body)}).then(x=>x.json());
   if(Array.isArray(r)&&r.length){ Object.assign(px, body); render(); cargarPersonal(); }
   else alert('No se pudo guardar el cambio.');
+};
+
+// ===== Retiro anticipado =====
+window.retiroAnticipado = async pid => {
+  const px = DATA.personal.find(x=>x.id===pid);
+  const ya = DATA.novedades.find(x=>x.personal_id===pid && x.tipo==='RETIRO ANTICIPADO');
+  if(ya){
+    if(!confirm(`${px.apellido_nombre} figura SE RETIRÓ ${ya.detalle||''}. ¿Quitar la marca de retiro?`)) return;
+    await fetch(SUPABASE_URL+'/rest/v1/novedades?id=eq.'+ya.id,{method:'DELETE',headers:H});
+    cargar(); return;
+  }
+  const ahora = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Argentina/Buenos_Aires'});
+  const hora = prompt('¿A qué hora se retiró? (ej: 12:30)', ahora);
+  if(hora===null) return;
+  const motivo = prompt('Motivo (opcional, ej: trámite médico):','');
+  if(motivo===null) return;
+  const detalle = hora.trim() + (motivo.trim()?' — '+motivo.trim().toUpperCase():'');
+  await fetch(SUPABASE_URL+'/rest/v1/novedades',{method:'POST',headers:{...H,'Content-Type':'application/json'},body:JSON.stringify({personal_id:pid,tipo:'RETIRO ANTICIPADO',detalle,desde:FECHA,hasta:FECHA})});
+  cargar();
 };
 
 // ===== Eliminar persona (baja logica) =====
