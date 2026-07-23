@@ -148,6 +148,13 @@ async function pantallaFichar(){
   <span class="candado">🔒 Vinculado a este teléfono</span></div>
   <div id="accion">Cargando...</div>`;
   const acc = document.getElementById('accion');
+  const abierto = await api(`fichajes?personal_id=eq.${yo.id}&hora_salida=is.null&fecha=lt.${hoy()}&order=fecha.desc&limit=1&select=*`);
+  if(abierto && abierto.length){
+    const a = abierto[0];
+    acc.innerHTML = `<div class="ok"><div class="tilde">⏱</div><h2>Turno abierto del ${a.fecha.split('-').reverse().join('/')}</h2><p style="color:#94a3b8">Entrada ${horaAR(a.hora_entrada)} — a terminar</p></div>
+    <button class="big rojo" onclick="salida(${a.id})">FINALIZAR TURNO (registrar salida)</button>`;
+    return;
+  }
   const f = await api(`fichajes?personal_id=eq.${yo.id}&fecha=eq.${hoy()}&select=*`);
   if(f && f.length){
     const reg = f[0];
