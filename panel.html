@@ -538,7 +538,11 @@ window.eliminarNovedad=async id=>{
   await cargar(); listaNovedades();
 };
 // ===== Cargar presente manualmente (sin teléfono) =====
+const MANUAL_HASH = '022daf4cd5b6591483f3d124877b5cbadcc751857cd03a4fb70e49818577a261';
 window.presenteManual = async id => {
+  const clave = prompt('Clave para cargar presente manual:');
+  if(clave===null) return;
+  if(await sha256hex(clave.trim()) !== MANUAL_HASH){ alert('Clave incorrecta.'); return; }
   const px = DATA.personal.find(x=>x.id===id);
   const nums = (px.horario||'08 a 20').match(/\d{1,2}/g)||['08'];
   const defHora = FECHA===hoy() ? new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Argentina/Buenos_Aires'}) : String(+nums[0]).padStart(2,'0')+':00';
