@@ -279,6 +279,7 @@ function cargarPersonal(){
       <select class="ofi-edit" onchange="editar(${p.id},'oficina',this)">${ofis.map(x=>`<option ${x===p.oficina?'selected':''}>${x}</option>`).join('')}</select>
       <input class="hor-edit" value="${p.horario||'08 a 20'}" onchange="editar(${p.id},'horario',this)">
       <button onclick="editarDatos(${p.id})" title="Editar nombre y jerarquía" style="background:#1d4ed8;color:#fff;border:none;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer">✏️</button>
+      <button onclick="linkPersonal(${p.id},'${p.apellido_nombre.replace(/'/g,"\\'")}')" title="Generar link personal de fichaje (solo para esta persona)" style="background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer">🔗</button>
       <button onclick="eliminarPersona(${p.id})" title="Eliminar del listado" style="background:#dc2626;color:#fff;border:none;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer">🗑</button>
       </span></li>`).join('');
     cont.innerHTML += `<div class="sec"><h3><span>${o}</span><span>${gente.length}</span></h3><ul>${lis}</ul></div>`;
@@ -553,6 +554,14 @@ window.limpiarHoy = async () => {
   await fetch(SUPABASE_URL+`/rest/v1/novedades?tipo=eq.VIRTUAL&desde=eq.${hoy()}`,{method:'DELETE',headers:H});
   if(r.ok){ alert('Fichajes de hoy borrados.'); cargar(); }
   else { alert('No se pudo borrar. Verifica la conexion.'); }
+};
+
+// ===== Link personal (unico por persona) =====
+window.linkPersonal = async (id,nombre) => {
+  const firma = (await sha256hex('JPRM-PERSONA-'+id)).slice(0,16);
+  const url = URL_FICHAJE + '?p=' + id + '.' + firma;
+  try{ await navigator.clipboard.writeText(url); }catch(e){}
+  prompt(`Link personal de ${nombre} — solo mandaselo a ella/él por WhatsApp. Ya quedó copiado:`, url);
 };
 
 // ===== Link fijo de Psicologia Virtual =====

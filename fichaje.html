@@ -107,6 +107,7 @@ let DEV = localStorage.getItem('jprm_dev');
 if(!DEV){ DEV = crypto.randomUUID(); localStorage.setItem('jprm_dev', DEV); }
 
 let yo = null;
+let PERSONA_LINK = null;
 
 // Al abrir: consultar a que persona esta vinculado ESTE telefono (la base manda, no el localStorage)
 async function iniciar(){
@@ -114,6 +115,13 @@ async function iniciar(){
   if(v && v.length && v[0].personal){
     yo = v[0].personal;
     pantallaFichar();
+  } else if(PERSONA_LINK){
+    const rows = await api(`personal?id=eq.${PERSONA_LINK}&activo=eq.true&select=id,jerarquia,apellido_nombre,oficina,horario`);
+    if(rows && rows.length){
+      elegir(rows[0]);
+    } else {
+      card.innerHTML = '<p style="color:#fca5a5;font-size:15px;text-align:center">⛔ No se encontró esa persona (puede haber sido dada de baja). Pedí un link nuevo en Administración.</p>';
+    }
   } else {
     pantallaBusqueda();
   }
@@ -142,6 +150,7 @@ window.elegir = p => {
   const hha0 = nums.length>1 ? String(+nums[1]).padStart(2,'0') : 'TERMINAR';
   const st = 'width:100%;padding:14px;border-radius:10px;border:1px solid #475569;background:#0f172a;color:#f1f5f9;font-size:16px';
   card.innerHTML = `<div class="quien"><b>${p.apellido_nombre}</b><small>${p.jerarquia}</small></div>
+  ${PERSONA_LINK?'<p style="color:#4ade80;font-size:13px;text-align:center;margin-bottom:8px">🔗 Este es tu link personal — este teléfono va a quedar vinculado a vos.</p>':''}
   <p style="color:#94a3b8;font-size:14px;margin-bottom:8px">Confirmá a qué oficina pertenecés:</p>
   <select id="sel-ofi" style="${st}">${OFICINAS.map(o=>`<option ${o===p.oficina?'selected':''}>${o}</option>`).join('')}</select>
   <p style="color:#94a3b8;font-size:14px;margin:14px 0 8px">Tu horario de trabajo:</p>
@@ -256,6 +265,16 @@ async function arrancar(){
     VIRT = true;
     document.getElementById('ofi').textContent = 'PSICOLOGÍA — VIRTUAL';
     document.getElementById('aviso').textContent = '🏠 Link de trabajo virtual — exclusivo del personal de Psicología';
+  }
+  const tokenPersona = qs.get('p');
+  if(tokenPersona){
+    const [pid,firmaP] = tokenPersona.split('.');
+    const okP = pid && firmaP && (await sha256hex('JPRM-PERSONA-'+pid)).slice(0,16) === firmaP;
+    if(!okP){
+      card.innerHTML = '<p style="color:#fca5a5;font-size:15px;text-align:center">⛔ Este link no es válido. Pedí el link correcto en Administración.</p>';
+      return;
+    }
+    PERSONA_LINK = +pid;
   }
   const pase = qs.get('pase');
   if(pase){
