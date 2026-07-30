@@ -69,39 +69,6 @@ function horaMostrar(horaIso, horario){
 const mostrarError = m => {errBox.textContent=m; errBox.style.display='block'};
 const limpiarError = () => errBox.style.display='none';
 
-// ============ CONTROL DE UBICACION (GRAL HORNOS 768, CABA) ============
-const JUNTA_LAT = -34.63599469983723;
-const JUNTA_LON = -58.37684058772086;
-const RADIO_METROS = 150;
-function distanciaMetros(lat1,lon1,lat2,lon2){
-  const R = 6371000, toRad = d => d*Math.PI/180;
-  const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
-  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-  return R * 2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-}
-function obtenerUbicacion(){
-  return new Promise((resolve,reject)=>{
-    if(!navigator.geolocation){ reject('nogeo'); return; }
-    navigator.geolocation.getCurrentPosition(
-      pos => resolve(pos.coords),
-      err => reject(err.code===1?'denegado':'error'),
-      {enableHighAccuracy:true, timeout:15000, maximumAge:0}
-    );
-  });
-}
-async function verificarUbicacion(){
-  try{
-    const c = await obtenerUbicacion();
-    const d = distanciaMetros(c.latitude,c.longitude,JUNTA_LAT,JUNTA_LON);
-    if(d > RADIO_METROS) return {ok:false, msg:`⛔ Estás a ${Math.round(d)}m de Junta. Tenés que estar a menos de ${RADIO_METROS}m del edificio para fichar. Acercate y volvé a intentar.`};
-    return {ok:true};
-  }catch(e){
-    if(e==='nogeo') return {ok:false, msg:'⛔ Tu navegador no permite verificar tu ubicación. Actualizalo o probá con Chrome/Safari.'};
-    if(e==='denegado') return {ok:false, msg:'⛔ Necesitás permitir el acceso a tu ubicación para fichar. Activalo (ícono de candado junto a la dirección → Ubicación → Permitir) y volvé a intentar.'};
-    return {ok:false, msg:'⛔ No se pudo verificar tu ubicación (señal GPS débil). Salí a campo abierto o cerca de una ventana y volvé a intentar.'};
-  }
-}
-
 // ID unico del telefono (se genera una sola vez)
 let DEV = localStorage.getItem('jprm_dev');
 if(!DEV){ DEV = crypto.randomUUID(); localStorage.setItem('jprm_dev', DEV); }
@@ -222,12 +189,6 @@ window.entrada = async () => {
     pantallaFichar();
     return;
   }
-  if(!VIRT && !PASE){
-    const acc0 = document.getElementById('accion');
-    if(acc0) acc0.innerHTML = '<p style="color:#94a3b8;text-align:center">📍 Verificando ubicación...</p>';
-    const chk = await verificarUbicacion();
-    if(!chk.ok){ mostrarError(chk.msg); pantallaFichar(); return; }
-  }
   if(VIRT){
     const ya = await api(`novedades?personal_id=eq.${yo.id}&tipo=eq.VIRTUAL&desde=eq.${hoy()}&select=id`);
     if(!ya || !ya.length){
@@ -248,12 +209,6 @@ window.entrada = async () => {
 
 window.salida = async id => {
   limpiarError();
-  if(!VIRT && !PASE){
-    const acc0 = document.getElementById('accion');
-    if(acc0) acc0.innerHTML = '<p style="color:#94a3b8;text-align:center">📍 Verificando ubicación...</p>';
-    const chk = await verificarUbicacion();
-    if(!chk.ok){ mostrarError(chk.msg); pantallaFichar(); return; }
-  }
   const r = await api(`fichajes?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({hora_salida:new Date().toISOString()})});
   if(Array.isArray(r) && r.length) pantallaFichar(); else mostrarError('No se pudo registrar la salida.');
 };
