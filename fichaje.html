@@ -111,12 +111,12 @@ let PERSONA_LINK = null;
 
 // Al abrir: consultar a que persona esta vinculado ESTE telefono (la base manda, no el localStorage)
 async function iniciar(){
-  const v = await api(`dispositivos?device_id=eq.${DEV}&select=personal_id,personal(id,jerarquia,apellido_nombre,oficina,horario)`);
+  const v = await api(`dispositivos?device_id=eq.${DEV}&select=personal_id,personal(id,jerarquia,apellido_nombre,oficina,horario,solo_link_personal)`);
   if(v && v.length && v[0].personal){
     yo = v[0].personal;
     pantallaFichar();
   } else if(PERSONA_LINK){
-    const rows = await api(`personal?id=eq.${PERSONA_LINK}&activo=eq.true&select=id,jerarquia,apellido_nombre,oficina,horario`);
+    const rows = await api(`personal?id=eq.${PERSONA_LINK}&activo=eq.true&select=id,jerarquia,apellido_nombre,oficina,horario,solo_link_personal`);
     if(rows && rows.length){
       elegir(rows[0]);
     } else {
@@ -181,6 +181,10 @@ window.confirmarOficina = async () => {
 };
 
 async function pantallaFichar(){
+  if(yo.solo_link_personal && !VIRT && !PASE && PERSONA_LINK !== yo.id){
+    card.innerHTML = `<div class="quien"><b>${yo.apellido_nombre}</b><small>${yo.jerarquia}</small></div><p style="color:#fca5a5;font-size:15px;text-align:center">🔒 Vos solo podés fichar con tu link personal, no con el QR general ni el NFC. Pedíselo a Administración si no lo tenés a mano.</p>`;
+    return;
+  }
   if(VIRT && !/PSICOLOG/i.test(yo.oficina||'')){
     card.innerHTML = `<div class="quien"><b>${yo.apellido_nombre}</b><small>${yo.jerarquia}</small></div><p style="color:#fca5a5;font-size:15px;text-align:center">⛔ Este link es exclusivo del personal de los gabinetes psicológicos. Fichá con el QR de la dependencia.</p>`;
     return;
@@ -213,6 +217,11 @@ async function pantallaFichar(){
 
 window.entrada = async () => {
   limpiarError();
+  if(yo.solo_link_personal && !VIRT && !PASE && PERSONA_LINK !== yo.id){
+    mostrarError('🔒 Vos solo podés fichar con tu link personal.');
+    pantallaFichar();
+    return;
+  }
   if(!VIRT && !PASE){
     const acc0 = document.getElementById('accion');
     if(acc0) acc0.innerHTML = '<p style="color:#94a3b8;text-align:center">📍 Verificando ubicación...</p>';

@@ -280,6 +280,7 @@ function cargarPersonal(){
       <input class="hor-edit" value="${p.horario||'08 a 20'}" onchange="editar(${p.id},'horario',this)">
       <button onclick="editarDatos(${p.id})" title="Editar nombre y jerarquía" style="background:#1d4ed8;color:#fff;border:none;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer">✏️</button>
       <button onclick="linkPersonal(${p.id},'${p.apellido_nombre.replace(/'/g,"\\'")}')" title="Generar link personal de fichaje (solo para esta persona)" style="background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer">🔗</button>
+      <button onclick="toggleSoloLink(${p.id},'${p.apellido_nombre.replace(/'/g,"\\'")}')" title="${p.solo_link_personal?'Ya ficha SOLO con su link personal — tocar para sacar la restricción':'Restringir: que solo pueda fichar con su link personal (no QR ni NFC)'}" style="background:${p.solo_link_personal?'#dc2626':'#e2e8f0'};color:${p.solo_link_personal?'#fff':'#475569'};border:none;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer">${p.solo_link_personal?'🔒':'🔓'}</button>
       <button onclick="eliminarPersona(${p.id})" title="Eliminar del listado" style="background:#dc2626;color:#fff;border:none;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer">🗑</button>
       </span></li>`).join('');
     cont.innerHTML += `<div class="sec"><h3><span>${o}</span><span>${gente.length}</span></h3><ul>${lis}</ul></div>`;
@@ -562,6 +563,19 @@ window.linkPersonal = async (id,nombre) => {
   const url = URL_FICHAJE + '?p=' + id + '.' + firma;
   try{ await navigator.clipboard.writeText(url); }catch(e){}
   prompt(`Link personal de ${nombre} — solo mandaselo a ella/él por WhatsApp. Ya quedó copiado:`, url);
+};
+
+// ===== Restriccion: solo puede fichar con su link personal =====
+window.toggleSoloLink = async (id,nombre) => {
+  const p = DATA.personal.find(x=>x.id===id);
+  const nuevo = !p.solo_link_personal;
+  const msg = nuevo
+    ? `¿${nombre} va a fichar SOLO con su link personal? No va a poder fichar escaneando el QR general ni con NFC. Si todavía no le generaste el link personal (🔗), hacelo también.`
+    : `¿Sacar la restricción? ${nombre} va a poder fichar de nuevo con el QR general o NFC, además de su link personal.`;
+  if(!confirm(msg)) return;
+  const r = await fetch(SUPABASE_URL+'/rest/v1/personal?id=eq.'+id,{method:'PATCH',headers:{...H,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({solo_link_personal:nuevo})}).then(x=>x.json());
+  if(Array.isArray(r)&&r.length){ p.solo_link_personal = nuevo; cargarPersonal(); }
+  else alert('No se pudo guardar el cambio.');
 };
 
 // ===== Link fijo de Psicologia Virtual =====
